@@ -2,7 +2,7 @@ import React from 'react'
 import {Routes,Route} from 'react-router-dom'
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import Home from './pages/Home.jsx'
+import Home from './pages/home.jsx'
 import Collection from './pages/collection.jsx'
 import Contact from './pages/contact.jsx'
 import Login from './pages/login.jsx'
