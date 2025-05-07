@@ -15,6 +15,8 @@ import Footer from './components/Footer'
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Verify from './pages/verify'
+import '@fortawesome/fontawesome-free/css/all.min.css';
+
 
 const App = () => {
   return (
