@@ -1,22 +1,21 @@
 import React from 'react'
-import {Routes,Route} from 'react-router-dom'
-import Home from './pages/Home'
-import Collection from './pages/Collection'
-import About from './pages/About'
-import Contact from './pages/contact'
-import Login from './pages/Login'
-import Product from './pages/Product'
-import Cart from './pages/Cart'
-import PlaceOrder from './pages/PlaceOrder'
-import Order from './pages/Order'
+import { Routes, Route } from 'react-router-dom'
+import Home from './Pages/Home'
+import Collection from './Pages/Collection'
+import About from './Pages/About'
+import Contact from './Pages/Contact'
+import Login from './Pages/Login'
+import Product from './Pages/Product'
+import Cart from './Pages/Cart'
+import PlaceOrder from './Pages/PlaceOrder'
+import Order from './Pages/Order'
 import Navbar from './components/Navbar'
 import SearchBar from './components/SearchBar'
 import Footer from './components/Footer'
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import Verify from './pages/verify'
-import '@fortawesome/fontawesome-free/css/all.min.css';
-
+import { ToastContainer, toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
+import Verify from './Pages/Verify'
+import '@fortawesome/fontawesome-free/css/all.min.css'
 
 const App = () => {
   return (
@@ -25,19 +24,18 @@ const App = () => {
       <Navbar />
       <SearchBar />
       <Routes>
-        <Route path='/' element={<Home/>} />
-        <Route path='/collection' element={<Collection/>} />
-        <Route path='/about' element={<About/>} />
-        <Route path='/contact' element={<Contact/>} />
-        <Route path='/login' element={<Login/>} />
-        <Route path='/product/:Productid' element={<Product/>} />
-        <Route path='/cart' element={<Cart/>} />
-        <Route path='/place-order' element={<PlaceOrder/>} />
-        <Route path='/order' element={<Order/>} />
-        <Route path='/verify' element={<Verify/>} />
+        <Route path='/' element={<Home />} />
+        <Route path='/collection' element={<Collection />} />
+        <Route path='/about' element={<About />} />
+        <Route path='/contact' element={<Contact />} />
+        <Route path='/login' element={<Login />} />
+        <Route path='/product/:Productid' element={<Product />} />
+        <Route path='/cart' element={<Cart />} />
+        <Route path='/place-order' element={<PlaceOrder />} />
+        <Route path='/order' element={<Order />} />
+        <Route path='/verify' element={<Verify />} />
       </Routes>
-      <Footer/>
-
+      <Footer />
     </div>
   )
 }
