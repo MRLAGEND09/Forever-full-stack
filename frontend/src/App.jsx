@@ -13,7 +13,7 @@ import Navbar from './components/Navbar'
 import SearchBar from './components/SearchBar'
 import Footer from './components/Footer'
 import { ToastContainer, } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
+import 'react-toastify/dist/ReactToastify.css' 
 import Verify from './Pages/Verify'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
