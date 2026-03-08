@@ -4,8 +4,8 @@ import Stripe from 'stripe'
 
 
 //global variables
-const currency = 'usd'
-const deliveryCharge = 10
+const currency = '৳'
+const deliveryCharge = 70
 
 // gataway initialize
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)

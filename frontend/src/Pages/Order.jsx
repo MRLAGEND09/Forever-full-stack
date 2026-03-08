@@ -60,12 +60,18 @@ const Order = () => {
                   <p className='mt-1'>Payment Method: <span className='text-gray-400'>{item.paymentMethod}</span></p>
                 </div>
               </div>
-              <div className='md:w-1/2 flex justify-between'>
+              <div className='flex justify-end w-full md:w-auto'>
                 <div className='flex items-center gap-2'>
-                  <p className='min-w-2 h-2 rounded-full bg-green-500'></p>
+                  <p className={`min-w-2 h-2 rounded-full ${
+                    item.status === 'Delivered' ? 'bg-green-500' :
+                    item.status === 'Order Placed' ? 'bg-yellow-400' :
+                    item.status === 'Shipped' ? 'bg-blue-500' :
+                    item.status === 'Out For Delivery' ? 'bg-orange-400' :
+                    item.status === 'Cancelled' ? 'bg-red-500' :
+                    'bg-gray-400'
+                  }`}></p>
                   <p className='text-sm md:text-base'>{item.status}</p>
                 </div>
-                <button onClick={loadOrderData} className='border px-4 py-2 text-sm font-medium rounded-sm'>Track Order</button>
               </div>
             </div>
           ))
