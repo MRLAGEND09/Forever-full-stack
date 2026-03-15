@@ -16,6 +16,7 @@ import "react-toastify/dist/ReactToastify.css";
 import Verify from "./Pages/Verify";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import ScrollToTop from "./components/ScrollToTop"; 
+import Profile from './Pages/Profile'
 
 const App = () => {
   return (
@@ -25,6 +26,7 @@ const App = () => {
       <Navbar />
       <SearchBar />
       <Routes>
+        <Route path='/profile' element={<Profile />} />
         <Route path="/" element={<Home />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/about" element={<About />} />

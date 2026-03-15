@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { ShopContext } from '../context/ShopContext'
 
 const SearchBar = () => {
-  const { search, setSearch, showSearch, setshowSearch } = useContext(ShopContext)
+  const { search, setSearch, showSearch, setShowSearch } = useContext(ShopContext)
   const [visible, setVisible] = useState(false)
   const location = useLocation()
 
@@ -29,7 +29,7 @@ const SearchBar = () => {
         <img className='w-4' src={assets.search_icon} alt="" />
       </div>
       <img
-        onClick={() => setshowSearch(false)}
+        onClick={() => setShowSearch(false)}
         className='inline w-3 cursor-pointer'
         src={assets.cross_icon}
         alt=""
