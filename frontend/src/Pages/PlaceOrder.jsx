@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react'
+import React, { useContext, useState, useEffect } from 'react'
 import Title from '../components/Title'
 import CartTotal from '../components/CartTotal'
 import { assets } from '../assets/assets'
@@ -24,6 +24,36 @@ const PlaceOrder = () => {
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState(false)
   const [couponLoading, setCouponLoading] = useState(false)
+
+  // Save abandoned cart when user visits checkout page
+  useEffect(() => {
+    const saveAbandonedCart = async () => {
+      if (!token || Object.keys(cartItems).length === 0) return
+      try {
+        let orderItems = []
+        for (const items in cartItems) {
+          for (const item in cartItems[items]) {
+            if (cartItems[items][item] > 0) {
+              const itemInfo = structuredClone(products.find(product => product._id === items))
+              if (itemInfo) {
+                itemInfo.size = item
+                itemInfo.quantity = cartItems[items][item]
+                orderItems.push(itemInfo)
+              }
+            }
+          }
+        }
+        if (orderItems.length === 0) return
+        await axios.post(backendUrl + '/api/abandoned/save', {
+          items: orderItems,
+          amount: getCartAmount() + delivery_fee
+        }, { headers: { token } })
+      } catch (error) {
+        console.log('Abandoned cart save error:', error)
+      }
+    }
+    saveAbandonedCart()
+  }, [token, cartItems, products])
 
   const onChangeHandler = (event) => {
     const name = event.target.name
@@ -99,6 +129,8 @@ const PlaceOrder = () => {
             if (couponApplied) {
               await axios.post(backendUrl + '/api/subscriber/use', { couponCode })
             }
+            // Clear abandoned cart after successful order
+            await axios.post(backendUrl + '/api/abandoned/clear', {}, { headers: { token } })
             setCartItems({})
             navigate('/order')
           } else {
@@ -112,6 +144,7 @@ const PlaceOrder = () => {
             if (couponApplied) {
               await axios.post(backendUrl + '/api/subscriber/use', { couponCode })
             }
+            await axios.post(backendUrl + '/api/abandoned/clear', {}, { headers: { token } })
             const { session_url } = responseStripe.data
             window.location.replace(session_url)
           } else {
@@ -189,8 +222,6 @@ const PlaceOrder = () => {
 
         <div className='mt-8'>
           <Title text1={'PAYMENT'} text2={'METHOD'} />
-
-          {/* ---- payment method selection ----- */}
           <div className='flex gap-3 flex-col lg:flex-row'>
             <div onClick={() => setMethod('stripe')} className='flex items-center gap-3 border p-2 px-3 cursor-pointer'>
               <p className={`min-w-3.5 h-3.5 border rounded-full ${method === 'stripe' ? 'bg-green-400' : ''}`}></p>
