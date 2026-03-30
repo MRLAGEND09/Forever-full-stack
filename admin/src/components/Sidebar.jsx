@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { assets } from '../assets/assets'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
-const Sidebar = ({ newOrderCount, setNewOrderCount }) => {
+const Sidebar = ({ newOrderCount, setNewOrderCount, newPendingCount }) => {
   return (
     <div className='w-[18%] min-h-screen border-r-2'>
       <div className='flex flex-col gap-4 pt-6 pl-[20%] text-[15px]'>
@@ -35,6 +35,17 @@ const Sidebar = ({ newOrderCount, setNewOrderCount }) => {
           )}
         </NavLink>
 
+        <NavLink
+          className='flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l'
+          to='/pending-orders'
+        >
+          <i className='fas fa-clock text-orange-500'></i>
+          <p className='hidden md:block'>Pending Orders</p>
+          {newPendingCount > 0 && (
+            <span className='bg-orange-500 text-white text-xs rounded-full px-2 py-0.5 ml-1'>{newPendingCount}</span>
+          )}
+        </NavLink>
+
         <NavLink className='flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l' to='/subscribers'>
           <i className='fas fa-envelope text-gray-600'></i>
           <p className='hidden md:block'>Subscribers</p>
@@ -43,6 +54,11 @@ const Sidebar = ({ newOrderCount, setNewOrderCount }) => {
         <NavLink className='flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l' to='/sales-report'>
           <i className='fas fa-chart-bar text-gray-600'></i>
           <p className='hidden md:block'>Sales Report</p>
+        </NavLink>
+        
+        <NavLink className='flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l' to='/abandoned-carts'>
+          <i className='fas fa-shopping-cart text-yellow-500'></i>
+          <p className='hidden md:block'>Abandoned Carts</p>
         </NavLink>
 
       </div>

@@ -13,6 +13,9 @@ import 'react-toastify/dist/ReactToastify.css'
 import axios from 'axios'
 import notificationSound from './assets/notification.mp3'
 import SalesReport from './pages/SalesReport'
+import PendingOrders from './pages/PendingOrders'
+import AbandonedCarts from './pages/AbandonedCarts'
+
 
 
 export const bakendUrl = import.meta.env.VITE_BACKEND_URL
@@ -21,13 +24,14 @@ export const currency = '৳'
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token') ? localStorage.getItem('token') : '')
   const [newOrderCount, setNewOrderCount] = useState(0)
+  const [newPendingCount, setNewPendingCount] = useState(0)
   const prevOrderCount = useRef(0)
+  const prevPendingCount = useRef(0)
 
   useEffect(() => {
     localStorage.setItem('token', token)
   }, [token])
 
-  // Background polling — works on all pages
   useEffect(() => {
     if (!token) return
 
@@ -44,6 +48,14 @@ const App = () => {
             toast.success(`🛍️ ${diff} new order received!`)
           }
           prevOrderCount.current = currentCount
+
+          // Pending orders count
+          const pendingOrders = response.data.orders.filter(o => o.accepted === 'pending')
+          const pendingCount = pendingOrders.length
+          if (prevPendingCount.current !== pendingCount) {
+            setNewPendingCount(pendingCount)
+            prevPendingCount.current = pendingCount
+          }
         }
       } catch (error) {}
     }
@@ -62,9 +74,14 @@ const App = () => {
           <Navbar setToken={setToken} />
           <hr />
           <div className='flex w-full'>
-            <Sidebar newOrderCount={newOrderCount} setNewOrderCount={setNewOrderCount} />
+            <Sidebar
+              newOrderCount={newOrderCount}
+              setNewOrderCount={setNewOrderCount}
+              newPendingCount={newPendingCount}
+            />
             <div className='w-[70%] mx-auto ml-[max(5vh,25px)] my-8 text-gray-600 text-base'>
               <Routes>
+                <Route path='/abandoned-carts' element={<AbandonedCarts token={token} />} />
                 <Route path='/sales-report' element={<SalesReport token={token} />} />
                 <Route path='/' element={<Dashboard token={token} />} />
                 <Route path='/dashboard' element={<Dashboard token={token} />} />
@@ -72,6 +89,7 @@ const App = () => {
                 <Route path='/list' element={<List token={token} />} />
                 <Route path='/orders' element={<Orders token={token} setNewOrderCount={setNewOrderCount} />} />
                 <Route path='/subscribers' element={<Subscribers token={token} />} />
+                <Route path='/pending-orders' element={<PendingOrders token={token} setNewPendingCount={setNewPendingCount} />} />
               </Routes>
             </div>
           </div>
