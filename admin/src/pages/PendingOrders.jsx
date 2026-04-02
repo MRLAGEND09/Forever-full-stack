@@ -2,11 +2,10 @@ import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import { bakendUrl, currency } from '../App'
 import { toast } from 'react-toastify'
-import { useNavigate } from 'react-router-dom'
 import { assets } from '../assets/assets'
+import { FaCheck, FaTimes, FaClock, FaEnvelope, FaMobileAlt, FaBoxOpen } from 'react-icons/fa'
 
 const PendingOrders = ({ token, setNewPendingCount }) => {
-  const navigate = useNavigate()
   const [orders, setOrders] = useState([])
   const [showChannelModal, setShowChannelModal] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState(null)
@@ -24,7 +23,7 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
     }
   }
 
-  const handleAccept = async (orderId) => {
+  const handleAccept = (orderId) => {
     setSelectedOrderId(orderId)
     setSelectedChannel('email')
     setShowChannelModal(true)
@@ -32,7 +31,6 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
 
   const confirmAccept = async () => {
     if (!selectedOrderId) return
-
     try {
       const res = await axios.post(`${bakendUrl}/api/order/accept`, {
         orderId: selectedOrderId,
@@ -40,7 +38,7 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
         notify: selectedChannel
       }, { headers: { token } })
       if (res.data.success) {
-        toast.success(`Order accepted and confirmation sent via ${selectedChannel}!`)
+        toast.success(`Order accepted! Confirmation sent via ${selectedChannel}!`)
         setShowChannelModal(false)
         setSelectedOrderId(null)
         fetchPendingOrders()
@@ -77,8 +75,8 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
   return (
     <div>
       <div className='flex items-center justify-between mb-4'>
-        <h3 className='text-xl font-semibold'>
-          ⏳ Pending Orders
+        <h3 className='text-xl font-semibold flex items-center gap-2'>
+          <FaClock className='text-orange-500' /> Pending Orders
         </h3>
         <p className='text-sm text-gray-500'>
           Total: <span className='font-bold text-orange-500'>{orders.length}</span>
@@ -87,7 +85,7 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
 
       {orders.length === 0 ? (
         <div className='text-center py-20 text-gray-400'>
-          <i className='fas fa-check-circle text-4xl text-green-400 mb-3'></i>
+          <FaCheck className='text-4xl text-green-400 mx-auto mb-3' />
           <p>No pending orders!</p>
         </div>
       ) : (
@@ -113,8 +111,8 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
                 <p>{order.address.street},</p>
                 <p>{order.address.city}, {order.address.country}</p>
                 <p>{order.address.phone}</p>
-                <p className='text-blue-500 mt-1'>
-                  📧 {order.address.email}
+                <p className='text-blue-500 mt-1 flex items-center gap-1'>
+                  <FaEnvelope /> {order.address.email}
                 </p>
               </div>
 
@@ -127,35 +125,26 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
 
               <div>
                 <p className='text-sm font-medium'>{currency}{order.amount}</p>
-                <p className='text-xs text-orange-500 mt-1'>
-                  <i className='fas fa-clock mr-1'></i>
-                  Awaiting approval
+                <p className='text-xs text-orange-500 mt-1 flex items-center gap-1'>
+                  <FaClock /> Awaiting approval
                 </p>
                 {order.invoiceNumber && (
-                  <p className='text-xs text-gray-400 mt-1'>
-                    #{order.invoiceNumber}
-                  </p>
+                  <p className='text-xs text-gray-400 mt-1'>#{order.invoiceNumber}</p>
                 )}
               </div>
 
               <div className='flex flex-col gap-2'>
                 <button
-                  onClick={() => navigate(`/order/${order._id}`)}
-                  className='bg-blue-500 text-white px-4 py-2 text-xs rounded hover:bg-blue-600'
-                >
-                  <i className='fas fa-eye mr-1'></i> View Details
-                </button>
-                <button
                   onClick={() => handleAccept(order._id)}
-                  className='bg-green-500 text-white px-4 py-2 text-xs rounded hover:bg-green-600'
+                  className='flex items-center justify-center gap-1 bg-green-500 text-white px-4 py-2 text-xs rounded hover:bg-green-600'
                 >
-                  <i className='fas fa-check mr-1'></i> Accept
+                  <FaCheck /> Accept
                 </button>
                 <button
                   onClick={() => handleReject(order._id)}
-                  className='bg-red-500 text-white px-4 py-2 text-xs rounded hover:bg-red-600'
+                  className='flex items-center justify-center gap-1 bg-red-500 text-white px-4 py-2 text-xs rounded hover:bg-red-600'
                 >
-                  <i className='fas fa-times mr-1'></i> Reject
+                  <FaTimes /> Reject
                 </button>
               </div>
             </div>
@@ -163,36 +152,57 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
         </div>
       )}
 
+      {/* Channel Modal */}
       {showChannelModal && (
         <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
           <div className='bg-white rounded-lg p-8 max-w-sm w-full mx-4 shadow-2xl'>
-            <h2 className='text-2xl font-bold mb-2 text-center'>📧 Send Confirmation</h2>
-            <p className='text-gray-600 text-center mb-6 text-sm'>Choose how customer receives order confirmation</p>
+            <h2 className='text-xl font-bold mb-2 text-center'>Send Confirmation</h2>
+            <p className='text-gray-600 text-center mb-6 text-sm'>How should the customer receive order confirmation?</p>
 
             <div className='space-y-3 mb-6'>
               <label className={`w-full p-4 rounded-lg border-2 flex items-center gap-3 cursor-pointer transition ${selectedChannel === 'email' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-300'}`}>
-                <input type='radio' name='channel' value='email' checked={selectedChannel === 'email'} onChange={() => setSelectedChannel('email')} className='w-5 h-5' />
+                <input
+                  type='radio'
+                  name='channel'
+                  value='email'
+                  checked={selectedChannel === 'email'}
+                  onChange={() => setSelectedChannel('email')}
+                  className='w-5 h-5'
+                />
                 <div>
-                  <p className='font-semibold'>📧 Email</p>
+                  <p className='font-semibold flex items-center gap-1'><FaEnvelope className='text-blue-500' /> Email</p>
                   <p className='text-xs text-gray-500'>Send confirmation to email</p>
                 </div>
               </label>
 
               <label className={`w-full p-4 rounded-lg border-2 flex items-center gap-3 cursor-pointer transition ${selectedChannel === 'phone' ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-300'}`}>
-                <input type='radio' name='channel' value='phone' checked={selectedChannel === 'phone'} onChange={() => setSelectedChannel('phone')} className='w-5 h-5' />
+                <input
+                  type='radio'
+                  name='channel'
+                  value='phone'
+                  checked={selectedChannel === 'phone'}
+                  onChange={() => setSelectedChannel('phone')}
+                  className='w-5 h-5'
+                />
                 <div>
-                  <p className='font-semibold'>📱 Phone (SMS)</p>
-                  <p className='text-xs text-gray-500'>Send confirmation to phone</p>
+                  <p className='font-semibold flex items-center gap-1'><FaMobileAlt className='text-green-500' /> SMS</p>
+                  <p className='text-xs text-gray-500'>Send confirmation via SMS</p>
                 </div>
               </label>
             </div>
 
             <div className='flex gap-3'>
-              <button onClick={() => setShowChannelModal(false)} className='flex-1 bg-gray-300 text-gray-800 py-2 rounded-lg hover:bg-gray-400 font-semibold transition'>
+              <button
+                onClick={() => setShowChannelModal(false)}
+                className='flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 font-semibold transition'
+              >
                 Cancel
               </button>
-              <button onClick={confirmAccept} className='flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold transition'>
-                ✓ Confirm
+              <button
+                onClick={confirmAccept}
+                className='flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold transition flex items-center justify-center gap-1'
+              >
+                <FaCheck /> Confirm
               </button>
             </div>
           </div>

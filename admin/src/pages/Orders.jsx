@@ -2,18 +2,18 @@ import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { bakendUrl, currency } from '../App';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
 import 'react-toastify/dist/ReactToastify.css';
 import { assets } from '../assets/assets';
 import notificationSound from '../assets/notification.mp3'
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { FaCheck, FaTimes, FaFilePdf, FaMoneyBillWave, FaEnvelope, FaPhone, FaTag, FaTicketAlt, FaBox } from 'react-icons/fa'
 
 const Orders = ({ token, setNewOrderCount }) => {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([])
   const [bulkStatus, setBulkStatus] = useState('Shipped')
+  const [invoiceModal, setInvoiceModal] = useState(null)
   const prevOrderCount = useRef(0)
 
   const fetchAllOrders = async () => {
@@ -97,7 +97,6 @@ const Orders = ({ token, setNewOrderCount }) => {
       toast.error('Please select at least one order!')
       return
     }
-
     try {
       await Promise.all(selectedOrders.map(orderId =>
         axios.post(`${bakendUrl}/api/order/status`, {
@@ -106,7 +105,6 @@ const Orders = ({ token, setNewOrderCount }) => {
           cancelReason: ''
         }, { headers: { token } })
       ))
-
       setOrders(prevOrders =>
         prevOrders.map(order =>
           selectedOrders.includes(order._id)
@@ -125,58 +123,95 @@ const Orders = ({ token, setNewOrderCount }) => {
     const doc = new jsPDF();
 
     // Header
-    doc.setFontSize(20);
-    doc.text('BLOOP - Bill Voucher', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text('Order ID: ' + order._id, 20, 35);
-    doc.text('Date: ' + new Date(order.date).toLocaleDateString(), 20, 45);
+    doc.setFillColor(0, 0, 0);
+    doc.rect(0, 0, 210, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('BLOOP', 105, 15, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text('Fashion & Style', 105, 23, { align: 'center' });
+    doc.text('Bill Voucher', 105, 30, { align: 'center' });
+
+    // Reset color
+    doc.setTextColor(0, 0, 0);
+
+    // Invoice info
+    doc.setFontSize(10);
+    doc.text(`Invoice: ${order.invoiceNumber || order._id}`, 15, 45);
+    doc.text(`Date: ${new Date(order.date).toLocaleDateString()}`, 15, 52);
+    doc.text(`Status: ${order.status}`, 15, 59);
+    doc.text(`Payment: ${order.payment ? 'Paid' : 'Pending'}`, 130, 45);
+    doc.text(`Method: ${order.paymentMethod}`, 130, 52);
+
+    // Divider
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, 65, 195, 65);
 
     // Customer Details
-    doc.setFontSize(14);
-    doc.text('Customer Details:', 20, 60);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Customer Details', 15, 74);
+    doc.setFont(undefined, 'normal');
     doc.setFontSize(10);
-    doc.text('Name: ' + order.address.firstName + ' ' + order.address.lastName, 20, 70);
-    doc.text('Address: ' + order.address.street + ', ' + order.address.city + ', ' + order.address.country + ', ' + order.address.zipcode, 20, 80);
-    doc.text('Phone: ' + order.address.phone, 20, 90);
-    doc.text('Email: ' + order.address.email, 20, 100);
+    doc.text(`Name: ${order.address.firstName} ${order.address.lastName}`, 15, 82);
+    doc.text(`Address: ${order.address.street}, ${order.address.city}, ${order.address.country} - ${order.address.zipcode}`, 15, 89);
+    doc.text(`Phone: ${order.address.phone}`, 15, 96);
+    doc.text(`Email: ${order.address.email}`, 15, 103);
+
+    // Divider
+    doc.line(15, 108, 195, 108);
 
     // Order Items Table
-    const tableColumn = ["Item", "Size", "Quantity", "Price", "Total"];
-    const tableRows = [];
+    const tableColumn = ["Product", "Size", "Qty", "Unit Price", "Total"];
+    const tableRows = order.items.map(item => [
+      item.name,
+      item.size,
+      item.quantity,
+      `${currency}${item.price}`,
+      `${currency}${(item.price * item.quantity).toFixed(2)}`
+    ]);
 
-    order.items.forEach(item => {
-      const itemData = [
-        item.name,
-        item.size,
-        item.quantity,
-        currency + item.price,
-        currency + (item.price * item.quantity)
-      ];
-      tableRows.push(itemData);
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 113,
+      headStyles: { fillColor: [0, 0, 0], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9 }
     });
-
-    doc.autoTable(tableColumn, tableRows, { startY: 110 });
 
     // Totals
     const finalY = doc.lastAutoTable.finalY + 10;
-    doc.text('Subtotal: ' + currency + order.amount, 140, finalY);
-    if (order.couponDiscount > 0) {
-      doc.text('Coupon Discount: -' + currency + order.couponDiscount, 140, finalY + 10);
-    }
-    doc.setFontSize(12);
-    doc.text('Total: ' + currency + (order.amount - (order.couponDiscount || 0)), 140, finalY + 20);
+    doc.setFontSize(10);
 
-    // Payment Info
-    doc.text('Payment Method: ' + order.paymentMethod, 20, finalY + 30);
-    doc.text('Payment Status: ' + (order.payment ? 'Paid' : 'Pending'), 20, finalY + 40);
-    doc.text('Order Status: ' + order.status, 20, finalY + 50);
+    const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0)
+    doc.text(`Subtotal: ${currency}${subtotal.toFixed(2)}`, 130, finalY);
+    doc.text(`Delivery: ${currency}70`, 130, finalY + 8);
+
+    if (order.couponDiscount > 0) {
+      doc.setTextColor(0, 150, 0);
+      doc.text(`Coupon Discount: -${currency}${order.couponDiscount}`, 130, finalY + 16);
+      doc.setTextColor(0, 0, 0);
+    }
+
+    if (order.productDiscount > 0) {
+      doc.setTextColor(0, 150, 0);
+      doc.text(`Product Discount: -${currency}${order.productDiscount}`, 130, finalY + 24);
+      doc.setTextColor(0, 0, 0);
+    }
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text(`Total: ${currency}${order.amount}`, 130, finalY + 35);
+    doc.setFont(undefined, 'normal');
 
     // Footer
     doc.setFontSize(8);
-    doc.text('Thank you for shopping with BLOOP!', 105, finalY + 70, { align: 'center' });
+    doc.setTextColor(150, 150, 150);
+    doc.text('Thank you for shopping with BLOOP!', 105, finalY + 50, { align: 'center' });
+    doc.text('For support: contact@bloop.com', 105, finalY + 56, { align: 'center' });
 
-    // Save the PDF
-    doc.save(`Bill_Voucher_${order._id}.pdf`);
+    doc.save(`Invoice_${order.invoiceNumber || order._id}.pdf`);
     toast.success('Bill PDF generated successfully!');
   }
 
@@ -186,23 +221,12 @@ const Orders = ({ token, setNewOrderCount }) => {
       if (response.data.success) {
         setOrders(prevOrders =>
           prevOrders.map(o =>
-            o._id === orderId
-              ? { ...o, payment: true }
-              : o
+            o._id === orderId ? { ...o, payment: true } : o
           )
         );
-
-        const sendTo = window.prompt('Send invoice to (type email or phone):', 'email');
-        if (sendTo && (sendTo === 'email' || sendTo === 'phone')) {
-          try {
-            await axios.post(`${bakendUrl}/api/order/send-invoice`, { orderId, method: sendTo }, { headers: { token } })
-            toast.success(`Invoice sent by ${sendTo} successfully!`)
-          } catch (e) {
-            toast.error('Invoice send failed: ' + e.message)
-          }
-        }
-
         toast.success("Payment marked as done!");
+        // Show invoice modal
+        setInvoiceModal(order)
       } else {
         toast.error(response.data.message);
       }
@@ -212,6 +236,15 @@ const Orders = ({ token, setNewOrderCount }) => {
     }
   }
 
+  const sendInvoice = async (orderId, method) => {
+    try {
+      await axios.post(`${bakendUrl}/api/order/send-invoice`, { orderId, method }, { headers: { token } })
+      toast.success(`Invoice sent by ${method} successfully!`)
+      setInvoiceModal(null)
+    } catch (e) {
+      toast.error('Invoice send failed: ' + e.message)
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -232,6 +265,54 @@ const Orders = ({ token, setNewOrderCount }) => {
 
   return (
     <div>
+      {/* Invoice Modal */}
+      {invoiceModal && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-white rounded-lg p-6 w-96 shadow-xl'>
+            <h3 className='text-lg font-semibold mb-2'>Send Invoice</h3>
+            <p className='text-sm text-gray-500 mb-4'>
+              Payment marked as done for <strong>{invoiceModal.address.firstName} {invoiceModal.address.lastName}</strong>.
+              How would you like to send the invoice?
+            </p>
+            <div className='flex flex-col gap-3'>
+              <button
+                onClick={() => sendInvoice(invoiceModal._id, 'email')}
+                className='flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600'
+              >
+                <FaEnvelope /> Send via Email
+              </button>
+              <button
+                onClick={() => sendInvoice(invoiceModal._id, 'sms')}
+                className='flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600'
+              >
+                <FaPhone /> Send via SMS
+              </button>
+              <button
+                onClick={() => { generateBillPDF(invoiceModal); setInvoiceModal(null); }}
+                className='flex items-center gap-2 bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800'
+              >
+                <FaFilePdf /> Download PDF
+              </button>
+              <button
+                onClick={() => {
+                  sendInvoice(invoiceModal._id, 'email');
+                  sendInvoice(invoiceModal._id, 'sms');
+                }}
+                className='flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600'
+              >
+                <FaCheck /> Send Both (Email + SMS)
+              </button>
+              <button
+                onClick={() => setInvoiceModal(null)}
+                className='flex items-center gap-2 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300'
+              >
+                <FaTimes /> Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className='flex items-center justify-between mb-4'>
         <h3 className='text-xl font-semibold'>Order Page</h3>
         <p className='text-sm text-gray-500'>Total Orders: <span className='font-bold text-black'>{orders.length}</span></p>
@@ -246,7 +327,6 @@ const Orders = ({ token, setNewOrderCount }) => {
           className='w-4 h-4 cursor-pointer'
         />
         <p className='text-sm text-gray-600'>Select All ({selectedOrders.length} selected)</p>
-
         {selectedOrders.length > 0 && (
           <>
             <select
@@ -259,17 +339,11 @@ const Orders = ({ token, setNewOrderCount }) => {
               <option value="Out For Delivery">Out For Delivery</option>
               <option value="Delivered">Delivered</option>
             </select>
-            <button
-              onClick={bulkStatusUpdate}
-              className='bg-black text-white text-sm px-4 py-2 rounded'
-            >
-              ✅ Update {selectedOrders.length} Orders
+            <button onClick={bulkStatusUpdate} className='bg-black text-white text-sm px-4 py-2 rounded flex items-center gap-1'>
+              <FaCheck /> Update {selectedOrders.length} Orders
             </button>
-            <button
-              onClick={() => setSelectedOrders([])}
-              className='bg-gray-400 text-white text-sm px-4 py-2 rounded'
-            >
-              Clear
+            <button onClick={() => setSelectedOrders([])} className='bg-gray-400 text-white text-sm px-4 py-2 rounded flex items-center gap-1'>
+              <FaTimes /> Clear
             </button>
           </>
         )}
@@ -277,7 +351,6 @@ const Orders = ({ token, setNewOrderCount }) => {
 
       <div>
         {orders.map((order, index) => {
-          // Calculate product discount
           const originalAmount = order.items.reduce((acc, item) => {
             return acc + (item.originalPrice || item.price) * item.quantity
           }, 0)
@@ -318,49 +391,43 @@ const Orders = ({ token, setNewOrderCount }) => {
                   <p>{order.address.city + ", " + order.address.country + ", " + order.address.zipcode}</p>
                 </div>
                 <p>{order.address.phone}</p>
-                <p className='text-blue-500 mt-1'>
-                  📧 {order.address.email}
+                <p className='text-blue-500 mt-1 flex items-center gap-1'>
+                  <FaEnvelope /> {order.address.email}
                 </p>
               </div>
 
               <div>
                 <p className='text-sm sm:text-[15px]'>Items: {order.items.length}</p>
                 <p className='mt-3'>Method: {order.paymentMethod}</p>
-                <p>Payment: {order.payment ? 'Done' : 'Pending'}</p>
-                {order.status !== 'Cancelled' && !order.payment && (
-                  <button
-                    onClick={() => markPaymentDone(order._id)}
-                    className='bg-green-500 text-white text-xs px-2 py-1 rounded mt-1 hover:bg-green-600 flex items-center gap-1'
-                  >
-                    <i className='fas fa-receipt'></i>
-                    Mark Paid
-                  </button>
-                )}
+                <p>Payment: {order.payment ? '✅ Done' : '⏳ Pending'}</p>
                 <p>Date: {new Date(order.date).toLocaleDateString()}</p>
               </div>
 
               <div>
                 <p className='text-sm sm:text-[15px] font-medium'>{currency}{order.amount}</p>
                 {hasProductDiscount && (
-                  <p className='text-red-500 text-xs mt-1'>
-                     Product discount applied
+                  <p className='text-red-500 text-xs mt-1 flex items-center gap-1'>
+                    <FaTag /> Product discount
                   </p>
                 )}
                 {order.couponDiscount > 0 && (
-                  <p className='text-blue-500 text-xs mt-1'>
-                     Coupon: -{currency}{order.couponDiscount}
+                  <p className='text-blue-500 text-xs mt-1 flex items-center gap-1'>
+                    <FaTicketAlt /> Coupon: -{currency}{order.couponDiscount}
                   </p>
                 )}
                 <p className={`text-xs mt-2 font-semibold ${getStatusColor(order.status)}`}>
                   ● {order.status}
                 </p>
+                {order.invoiceNumber && (
+                  <p className='text-xs text-gray-400 mt-1'>#{order.invoiceNumber}</p>
+                )}
               </div>
 
-              <div>
+              <div className='flex flex-col gap-2'>
                 <select
                   onChange={(event) => statusHandler(event, order._id)}
                   value={order.status || "Order Placed"}
-                  className='p-2 font-semibold'
+                  className='p-2 font-semibold border rounded'
                 >
                   <option value="Order Placed">Order Placed</option>
                   <option value="Shipped">Shipped</option>
@@ -368,31 +435,36 @@ const Orders = ({ token, setNewOrderCount }) => {
                   <option value="Delivered">Delivered</option>
                   <option value="Cancelled">Cancel Order</option>
                 </select>
+
                 {order.status === "Cancelled" && order.cancelReason && (
-                  <p className="text-gray-500 font-semibold mt-2">
+                  <p className="text-gray-500 text-xs mt-1">
                     Reason: {order.cancelReason}
                   </p>
                 )}
-                <div className='flex flex-wrap gap-2 mt-2'>
-                  <button
-                    onClick={() => navigate(`/order/${order._id}`)}
-                    className='bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700'
-                  >
-                     View Details
-                  </button>
+
+                <div className='flex flex-wrap gap-2 mt-1'>
                   <button
                     onClick={() => generateBillPDF(order)}
-                    className='bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600'
+                    className='flex items-center gap-1 bg-gray-700 text-white text-xs px-3 py-1 rounded hover:bg-gray-800'
                   >
-                    📋 PDF
+                    <FaFilePdf /> PDF
                   </button>
+
                   {order.status !== 'Cancelled' && !order.payment && (
                     <button
                       onClick={() => markPaymentDone(order._id, order)}
-                      className='bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 flex items-center gap-1'
+                      className='flex items-center gap-1 bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600'
                     >
-                      <i className='fas fa-receipt'></i>
-                      ✅ Mark Paid + Send Invoice
+                      <FaMoneyBillWave /> Mark Paid
+                    </button>
+                  )}
+
+                  {order.payment && (
+                    <button
+                      onClick={() => setInvoiceModal(order)}
+                      className='flex items-center gap-1 bg-blue-500 text-white text-xs px-3 py-1 rounded hover:bg-blue-600'
+                    >
+                      <FaEnvelope /> Send Invoice
                     </button>
                   )}
                 </div>
