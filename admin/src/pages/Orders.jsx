@@ -6,7 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { assets } from '../assets/assets';
 import notificationSound from '../assets/notification.mp3'
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { FaCheck, FaTimes, FaFilePdf, FaMoneyBillWave, FaEnvelope, FaPhone, FaTag, FaTicketAlt, FaBox } from 'react-icons/fa'
 
 const Orders = ({ token, setNewOrderCount }) => {
@@ -27,7 +27,7 @@ const Orders = ({ token, setNewOrderCount }) => {
           const diff = currentCount - prevOrderCount.current
           setNewOrderCount && setNewOrderCount(prev => prev + diff)
           const audio = new Audio(notificationSound)
-          audio.play().catch(() => {})
+          audio.play().catch(() => { })
           toast.success(`🛍️ ${diff} new order received!`)
         }
         prevOrderCount.current = currentCount
@@ -171,7 +171,9 @@ const Orders = ({ token, setNewOrderCount }) => {
       `${currency}${(item.price * item.quantity).toFixed(2)}`
     ]);
 
-    doc.autoTable({
+    // Add PDF Table
+
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 113,
@@ -182,6 +184,7 @@ const Orders = ({ token, setNewOrderCount }) => {
 
     // Totals
     const finalY = doc.lastAutoTable.finalY + 10;
+
     doc.setFontSize(10);
 
     const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0)
