@@ -4,7 +4,7 @@ import productModel from '../models/productModel.js'
 // function for add product
 const addProduct = async (req, res) => {
     try {
-        const { name, description, price, category, subCategory, sizes, bestseller, discount, discountActive } = req.body;
+        const { name, description, price, category, subCategory, sizes, bestseller, discount, discountActive, collections, showInCollection } = req.body;
 
         const image1 = req.files.image1 && req.files.image1[0];
         const image2 = req.files.image2 && req.files.image2[0];
@@ -31,6 +31,8 @@ const addProduct = async (req, res) => {
             image: imagesUrl,
             discount: Number(discount) || 0,
             discountActive: discountActive === 'true' ? true : false,
+            collections: collections ? JSON.parse(collections) : [],
+            showInCollection: showInCollection === 'true' ? true : false,
             date: Date.now()
         };
 
@@ -93,4 +95,19 @@ const updateDiscount = async (req, res) => {
     }
 }
 
-export { listProduct, addProduct, removeProduct, singleProduct, updateDiscount }
+// function for update product collection
+const updateCollection = async (req, res) => {
+    try {
+        const { productId, collections, showInCollection } = req.body;
+        await productModel.findByIdAndUpdate(productId, {
+            collections: collections || [],
+            showInCollection: showInCollection
+        })
+        res.json({ success: true, message: "Collection updated successfully" })
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message })
+    }
+}
+
+export { listProduct, addProduct, removeProduct, singleProduct, updateDiscount, updateCollection }
