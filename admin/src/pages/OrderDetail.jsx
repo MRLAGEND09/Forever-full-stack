@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import axios from 'axios'
-import { bakendUrl, currency } from '../App'
+import { bakendUrl } from '../App'
 import { toast } from 'react-toastify'
 import { useParams, useNavigate } from 'react-router-dom'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -42,6 +42,9 @@ const OrderDetail = ({ token }) => {
       </div>
     )
   }
+
+  const getMoneyPrefix = () => `${order?.currencyCode || 'BDT'} `
+  const formatMoney = (value) => `${getMoneyPrefix()}${Number(value || 0).toFixed(2)}`
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -124,10 +127,24 @@ const OrderDetail = ({ token }) => {
             <h3 className='text-lg font-bold mb-4'>Payment Details</h3>
             <p className='text-gray-600 mb-2'><strong>Method:</strong> {order.paymentMethod}</p>
             <p className='text-gray-600 mb-2'><strong>Status:</strong> {order.payment ? '✅ Paid' : '❌ Pending'}</p>
-            <p className='text-gray-600 mb-2'><strong>Amount:</strong> {currency}{order.amount}</p>
+            <p className='text-gray-600 mb-2'><strong>Currency:</strong> {order.currencyCode || 'BDT'}</p>
+            <p className='text-gray-600 mb-2'><strong>Amount:</strong> {formatMoney(order.amount)}</p>
+            <p className='text-gray-600 mb-2'><strong>Shipping Fee:</strong> {formatMoney(order.shippingFee || 70)}</p>
             {order.couponDiscount > 0 && (
-              <p className='text-gray-600'><strong>Discount:</strong> {currency}{order.couponDiscount}</p>
+              <p className='text-gray-600'><strong>Discount:</strong> {formatMoney(order.couponDiscount)}</p>
             )}
+            {order.productDiscount > 0 && (
+              <p className='text-gray-600'><strong>Product Discount:</strong> {formatMoney(order.productDiscount)}</p>
+            )}
+          </div>
+
+          <div className='border rounded-lg p-6'>
+            <h3 className='text-lg font-bold mb-4'>Shipping & Schedule</h3>
+            <p className='text-gray-600 mb-2'><strong>Region:</strong> {order.shippingRegion || 'domestic'}</p>
+            <p className='text-gray-600 mb-2'><strong>Method:</strong> {order.shippingMethod || 'standard'}</p>
+            <p className='text-gray-600 mb-2'><strong>Slot:</strong> {order.deliverySlot || 'anytime'}</p>
+            <p className='text-gray-600 mb-2'><strong>Scheduled At:</strong> {order.scheduledDeliveryAt ? new Date(order.scheduledDeliveryAt).toLocaleString() : 'Not scheduled'}</p>
+            <p className='text-gray-600'><strong>Delivered At:</strong> {order.deliveredAt ? new Date(order.deliveredAt).toLocaleString() : 'Not delivered yet'}</p>
           </div>
         </div>
 
@@ -149,13 +166,13 @@ const OrderDetail = ({ token }) => {
                   <td className='p-2'>{item.name}</td>
                   <td className='text-center p-2'>{item.size}</td>
                   <td className='text-center p-2'>{item.quantity}</td>
-                  <td className='text-right p-2'>{currency}{item.price * item.quantity}</td>
+                  <td className='text-right p-2'>{formatMoney(item.price * item.quantity)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className='mt-4 text-right text-lg font-bold'>
-            Total: {currency}{order.amount}
+            Total: {formatMoney(order.amount)}
           </div>
         </div>
 

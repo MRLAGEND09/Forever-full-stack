@@ -25,6 +25,15 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [brand, setBrand] = useState('')
+  const [colors, setColors] = useState('')
+  const [stock, setStock] = useState(20)
+  const [reorderThreshold, setReorderThreshold] = useState(5)
+  const [reorderQuantity, setReorderQuantity] = useState(20)
+  const [regions, setRegions] = useState(['global'])
+  const [model3dUrl, setModel3dUrl] = useState('')
+  const [virtualTryOnUrl, setVirtualTryOnUrl] = useState('')
+  const [arSceneUrl, setArSceneUrl] = useState('')
   const [Category, setCategory] = useState("Men");
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestseller] = useState(false);
@@ -51,10 +60,19 @@ const Add = ({ token }) => {
       formData.append("price", Number(price));
       formData.append("category", Category);
       formData.append("subCategory", subCategory);
+      formData.append("brand", brand);
+      formData.append("colors", JSON.stringify(colors.split(',').map((item) => item.trim()).filter(Boolean)));
       formData.append("bestseller", bestseller.toString());
       formData.append("sizes", JSON.stringify(sizes));
       formData.append("collections", JSON.stringify(selectedCollections));
       formData.append("showInCollection", showInCollection.toString());
+      formData.append("stock", Number(stock));
+      formData.append("reorderThreshold", Number(reorderThreshold));
+      formData.append("reorderQuantity", Number(reorderQuantity));
+      formData.append("regions", JSON.stringify(regions));
+      formData.append("model3dUrl", model3dUrl);
+      formData.append("virtualTryOnUrl", virtualTryOnUrl);
+      formData.append("arSceneUrl", arSceneUrl);
 
       image1 && formData.append("image1", image1);
       image2 && formData.append("image2", image2);
@@ -67,15 +85,24 @@ const Add = ({ token }) => {
         toast.success(response.data.message)
         setName('')
         setDescription('')
-        setImage1(false)
-        setImage2(false)
-        setImage3(false)
-        setImage4(false)
+        setImage1(null)
+        setImage2(null)
+        setImage3(null)
+        setImage4(null)
         setPrice('')
         setSelectedCollections([])
         setShowInCollection(false)
         setBestseller(false)
         setSizes([])
+        setBrand('')
+        setColors('')
+        setStock(20)
+        setReorderThreshold(5)
+        setReorderQuantity(20)
+        setRegions(['global'])
+        setModel3dUrl('')
+        setVirtualTryOnUrl('')
+        setArSceneUrl('')
       } else {
         toast.error(response.data.message)
       }
@@ -119,6 +146,11 @@ const Add = ({ token }) => {
         <textarea onChange={(e) => setDescription(e.target.value)} value={description} className='w-full max-w-[500px] px-3 py-2' type="text" placeholder='write content here' required />
       </div>
 
+      <div className='w-full max-w-[500px] grid grid-cols-1 sm:grid-cols-2 gap-3'>
+        <input onChange={(e) => setBrand(e.target.value)} value={brand} className='px-3 py-2 border' type='text' placeholder='Brand (optional)' />
+        <input onChange={(e) => setColors(e.target.value)} value={colors} className='px-3 py-2 border' type='text' placeholder='Colors comma separated' />
+      </div>
+
       <div className='flex flex-col sm:flex-row gap-2 w-full sm:gap-8'>
         <div>
           <p className='mb-2'>Product Category</p>
@@ -142,6 +174,47 @@ const Add = ({ token }) => {
           <p className='mb-2'>Product Price</p>
           <input onChange={(e) => setPrice(e.target.value)} value={price} className='w-full px-3 py-2 sm:w-[120px]' type="Number" placeholder='25' />
         </div>
+        <div>
+          <p className='mb-2'>Stock</p>
+          <input onChange={(e) => setStock(e.target.value)} value={stock} className='w-full px-3 py-2 sm:w-[120px]' type='number' min='0' />
+        </div>
+      </div>
+
+      <div className='w-full max-w-[500px]'>
+        <p className='mb-2'>Inventory Rules</p>
+        <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+          <div>
+            <p className='text-xs text-gray-600 mb-1'>Low Stock Alert Threshold</p>
+            <input onChange={(e) => setReorderThreshold(e.target.value)} value={reorderThreshold} className='w-full px-3 py-2 border' type='number' min='1' placeholder='5' />
+          </div>
+          <div>
+            <p className='text-xs text-gray-600 mb-1'>Auto Reorder Quantity</p>
+            <input onChange={(e) => setReorderQuantity(e.target.value)} value={reorderQuantity} className='w-full px-3 py-2 border' type='number' min='1' placeholder='20' />
+          </div>
+        </div>
+      </div>
+
+      <div className='w-full max-w-[500px]'>
+        <p className='mb-2'>Regions</p>
+        <div className='flex gap-2 flex-wrap'>
+          {['global', 'domestic', 'south_asia', 'international'].map((region) => (
+            <button
+              key={region}
+              type='button'
+              onClick={() => setRegions((prev) => prev.includes(region) ? prev.filter((item) => item !== region) : [...prev, region])}
+              className={`text-xs px-3 py-1 border ${regions.includes(region) ? 'bg-black text-white' : 'bg-white'}`}
+            >
+              {region}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className='w-full max-w-[500px] grid grid-cols-1 gap-3'>
+        <p className='text-xs text-gray-600'>Advanced AR/VR (optional). Product page now has auto 3D preview even without these URLs.</p>
+        <input onChange={(e) => setModel3dUrl(e.target.value)} value={model3dUrl} className='px-3 py-2 border' type='url' placeholder='3D model URL (optional)' />
+        <input onChange={(e) => setVirtualTryOnUrl(e.target.value)} value={virtualTryOnUrl} className='px-3 py-2 border' type='url' placeholder='Virtual try-on URL (optional)' />
+        <input onChange={(e) => setArSceneUrl(e.target.value)} value={arSceneUrl} className='px-3 py-2 border' type='url' placeholder='AR scene URL (optional)' />
       </div>
 
       <div>
@@ -201,7 +274,7 @@ const Add = ({ token }) => {
           </div>
         )}
       </div>
-      <button type="submit" className='w-28 py- 3 mt-4 bg-black text-white'>ADD</button>
+      <button type="submit" className='w-28 py-3 mt-4 bg-black text-white'>ADD</button>
     </form>
   )
 }

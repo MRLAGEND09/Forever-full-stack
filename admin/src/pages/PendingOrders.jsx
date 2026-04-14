@@ -10,6 +10,7 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
   const [showChannelModal, setShowChannelModal] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState(null)
   const [selectedChannel, setSelectedChannel] = useState('email')
+  const [isSubmittingAccept, setIsSubmittingAccept] = useState(false)
 
   const fetchPendingOrders = async () => {
     try {
@@ -30,7 +31,8 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
   }
 
   const confirmAccept = async () => {
-    if (!selectedOrderId) return
+    if (!selectedOrderId || isSubmittingAccept) return
+    setIsSubmittingAccept(true)
     try {
       const res = await axios.post(`${bakendUrl}/api/order/accept`, {
         orderId: selectedOrderId,
@@ -38,13 +40,15 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
         notify: selectedChannel
       }, { headers: { token } })
       if (res.data.success) {
-        toast.success(`Order accepted! Confirmation sent via ${selectedChannel}!`)
+        toast.success(res.data.duplicate ? 'Order already accepted. Duplicate send blocked.' : `Order accepted! Confirmation sent via ${selectedChannel}!`)
         setShowChannelModal(false)
         setSelectedOrderId(null)
         fetchPendingOrders()
       }
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setIsSubmittingAccept(false)
     }
   }
 
@@ -194,15 +198,17 @@ const PendingOrders = ({ token, setNewPendingCount }) => {
             <div className='flex gap-3'>
               <button
                 onClick={() => setShowChannelModal(false)}
+                disabled={isSubmittingAccept}
                 className='flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 font-semibold transition'
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAccept}
-                className='flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold transition flex items-center justify-center gap-1'
+                disabled={isSubmittingAccept}
+                className='flex-1 bg-blue-600 disabled:bg-blue-300 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold transition flex items-center justify-center gap-1'
               >
-                <FaCheck /> Confirm
+                <FaCheck /> {isSubmittingAccept ? 'Sending...' : 'Confirm'}
               </button>
             </div>
           </div>
