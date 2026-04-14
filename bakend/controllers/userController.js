@@ -228,8 +228,112 @@ const deleteAccount = async (req, res) => {
     }
 }
 
+const addShippingAddress = async (req, res) => {
+    try {
+        const { userId, label = 'Home', street = '', city = '', state = '', zipcode = '', country = '', phone = '' } = req.body
+        const user = await userModel.findById(userId)
+        if (!user) return res.json({ success: false, message: 'User not found' })
+
+        const address = { label, street, city, state, zipcode, country, phone }
+        user.addresses = [...(user.addresses || []), address].slice(-10)
+        await user.save()
+        res.json({ success: true, addresses: user.addresses })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const listShippingAddresses = async (req, res) => {
+    try {
+        const { userId } = req.body
+        const user = await userModel.findById(userId).select('addresses')
+        if (!user) return res.json({ success: false, message: 'User not found' })
+        res.json({ success: true, addresses: user.addresses || [] })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const removeShippingAddress = async (req, res) => {
+    try {
+        const { userId, index } = req.body
+        const user = await userModel.findById(userId)
+        if (!user) return res.json({ success: false, message: 'User not found' })
+
+        const idx = Number(index)
+        if (!Number.isInteger(idx) || idx < 0 || idx >= (user.addresses || []).length) {
+            return res.json({ success: false, message: 'Invalid address index' })
+        }
+
+        user.addresses.splice(idx, 1)
+        await user.save()
+        res.json({ success: true, addresses: user.addresses || [] })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const savePaymentMethod = async (req, res) => {
+    try {
+        const { userId, type = 'card', provider = 'stripe', last4 = '', brand = '', holderName = '', isDefault = false } = req.body
+        if (!last4) {
+            return res.json({ success: false, message: 'Payment method last4 is required' })
+        }
+
+        const user = await userModel.findById(userId)
+        if (!user) return res.json({ success: false, message: 'User not found' })
+
+        let methods = user.savedPaymentMethods || []
+        if (isDefault) {
+            methods = methods.map((item) => ({ ...item.toObject?.() || item, isDefault: false }))
+        }
+
+        methods.push({ type, provider, last4, brand, holderName, isDefault })
+        user.savedPaymentMethods = methods.slice(-5)
+        await user.save()
+
+        res.json({ success: true, paymentMethods: user.savedPaymentMethods })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const listPaymentMethods = async (req, res) => {
+    try {
+        const { userId } = req.body
+        const user = await userModel.findById(userId).select('savedPaymentMethods')
+        if (!user) return res.json({ success: false, message: 'User not found' })
+        res.json({ success: true, paymentMethods: user.savedPaymentMethods || [] })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const updatePreferences = async (req, res) => {
+    try {
+        const { userId, preferredCurrency, preferredLanguage, preferredRegion } = req.body
+        const update = {}
+        if (preferredCurrency) update.preferredCurrency = preferredCurrency
+        if (preferredLanguage) update.preferredLanguage = preferredLanguage
+        if (preferredRegion) update.preferredRegion = preferredRegion
+
+        await userModel.findByIdAndUpdate(userId, update)
+        res.json({ success: true, message: 'Preferences updated' })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
 export {
     loginUser, registerUser, adminLogin, socialLogin,
     getUserProfile, updateProfile, changePassword,
     uploadAvatar, deleteAddress, deleteAccount
+    , addShippingAddress, listShippingAddresses, removeShippingAddress,
+    savePaymentMethod, listPaymentMethods, updatePreferences
 }

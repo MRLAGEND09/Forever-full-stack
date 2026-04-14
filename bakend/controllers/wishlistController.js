@@ -1,5 +1,6 @@
 import wishlistModel from "../models/wishlistModel.js";
 import productModel from "../models/productModel.js";
+import wishlistShareModel from "../models/wishlistShareModel.js";
 
 // Add to wishlist
 const addToWishlist = async (req, res) => {
@@ -62,4 +63,41 @@ const checkWishlist = async (req, res) => {
     }
 };
 
-export { addToWishlist, removeFromWishlist, getUserWishlist, checkWishlist };
+const createWishlistShareLink = async (req, res) => {
+    try {
+        const { userId } = req.body
+        const shareToken = Buffer.from(`${userId}:${Date.now()}`).toString('base64url')
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+        await wishlistShareModel.findOneAndUpdate(
+            { userId: String(userId) },
+            { shareToken, expiresAt },
+            { upsert: true, new: true }
+        )
+
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+        const shareUrl = `${frontendUrl}/wishlist?share=${shareToken}`
+        res.json({ success: true, shareUrl, expiresAt })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+const getSharedWishlist = async (req, res) => {
+    try {
+        const { shareToken } = req.body
+        const share = await wishlistShareModel.findOne({ shareToken }).lean()
+        if (!share || new Date(share.expiresAt) < new Date()) {
+            return res.json({ success: false, message: 'Share link expired or invalid' })
+        }
+
+        const wishlistItems = await wishlistModel.find({ userId: share.userId }).populate('productId').lean()
+        res.json({ success: true, wishlist: wishlistItems })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+export { addToWishlist, removeFromWishlist, getUserWishlist, checkWishlist, createWishlistShareLink, getSharedWishlist };

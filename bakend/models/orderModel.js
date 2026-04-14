@@ -26,6 +26,12 @@ const orderSchema = new mongoose.Schema({
     invoiceNumber: { type: String, default: "" },
     stripeSessionId: { type: String, default: '' },
     stripeSessionUrl: { type: String, default: '' },
+    currencyCode: { type: String, default: 'BDT' },
+    shippingMethod: { type: String, default: 'standard' },
+    shippingRegion: { type: String, default: 'domestic' },
+    shippingFee: { type: Number, default: 70 },
+    deliverySlot: { type: String, default: '' },
+    scheduledDeliveryAt: { type: Date, default: null },
     // Admin action attribution
     lastActionBy: { type: String, default: '' },
     actionHistory: {

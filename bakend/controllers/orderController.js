@@ -6,9 +6,43 @@ import Stripe from 'stripe'
 import nodemailer from 'nodemailer'
 import PDFDocument from 'pdfkit'
 
-const currency = '৳'
+const DEFAULT_CURRENCY_CODE = 'BDT'
 const deliveryCharge = 70
 const COUPON_PERCENT = 20
+
+const SHIPPING_OPTIONS = {
+    domestic: [
+        { method: 'standard', label: 'Domestic Standard', fee: 70, eta: '2-4 days' },
+        { method: 'express', label: 'Domestic Express', fee: 120, eta: '1-2 days' }
+    ],
+    south_asia: [
+        { method: 'regional', label: 'South Asia Priority', fee: 300, eta: '4-7 days' }
+    ],
+    international: [
+        { method: 'global', label: 'Global Shipping', fee: 700, eta: '7-14 days' },
+        { method: 'global_express', label: 'Global Express', fee: 1200, eta: '4-7 days' }
+    ]
+}
+
+const resolveShippingOption = (region = 'domestic', method = 'standard') => {
+    const group = SHIPPING_OPTIONS[region] || SHIPPING_OPTIONS.domestic
+    return group.find((item) => item.method === method) || group[0]
+}
+
+const getOrderCurrencyCode = (order = {}) => String(order.currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase()
+const getMoneyPrefix = (order = {}) => `${getOrderCurrencyCode(order)} `
+const formatMoney = (order = {}, value = 0) => `${getMoneyPrefix(order)}${Number(value || 0).toFixed(2)}`
+
+const wasRecentAction = (order = {}, action = '', withinMs = 15000) => {
+    const history = Array.isArray(order.actionHistory) ? order.actionHistory : []
+    const now = Date.now()
+
+    return history.some((entry) => {
+        if (entry?.action !== action || !entry?.at) return false
+        const actionTime = new Date(entry.at).getTime()
+        return Number.isFinite(actionTime) && (now - actionTime) <= withinMs
+    })
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
@@ -178,39 +212,46 @@ const emailStyles = `
 `
 
 // Items HTML helper
-const getItemsHTML = (items) => items.map(item => `
+const getItemsHTML = (items, moneyPrefix) => items.map(item => `
     <tr>
         <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name}</td>
         <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.size}</td>
         <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${currency}${item.price}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${moneyPrefix}${Number(item.price || 0).toFixed(2)}</td>
     </tr>
 `).join('')
 
 // Total HTML helper
 const getTotalHTML = (order) => `
     <div class="total-section">
+        ${(() => {
+            const shippingFee = Number(order.shippingFee ?? deliveryCharge)
+            const subtotal = Number((order.amount - shippingFee + (order.couponDiscount || 0)).toFixed(2))
+            const moneyPrefix = getMoneyPrefix(order)
+            return `
         <div class="total-row">
             <span>Subtotal</span>
-            <span>${currency}${(order.amount - deliveryCharge + (order.couponDiscount || 0)).toFixed(2)}</span>
+            <span>${moneyPrefix}${subtotal.toFixed(2)}</span>
         </div>
         <div class="total-row">
             <span>Delivery Fee</span>
-            <span>${currency}${deliveryCharge}</span>
+            <span>${moneyPrefix}${shippingFee.toFixed(2)}</span>
         </div>
+            `
+        })()}
         ${order.couponDiscount > 0 ? `
         <div class="total-row" style="color: green;">
             <span>Coupon Discount</span>
-            <span>-${currency}${order.couponDiscount}</span>
+            <span>-${getMoneyPrefix(order)}${Number(order.couponDiscount || 0).toFixed(2)}</span>
         </div>` : ''}
         ${order.productDiscount > 0 ? `
         <div class="total-row" style="color: green;">
             <span>Product Discount</span>
-            <span>-${currency}${order.productDiscount}</span>
+            <span>-${getMoneyPrefix(order)}${Number(order.productDiscount || 0).toFixed(2)}</span>
         </div>` : ''}
         <div class="total-row final">
             <span>Total</span>
-            <span>${currency}${order.amount}</span>
+            <span>${getMoneyPrefix(order)}${Number(order.amount || 0).toFixed(2)}</span>
         </div>
     </div>
 `
@@ -218,6 +259,7 @@ const getTotalHTML = (order) => `
 // Send order placed email
 const sendOrderConfirmationEmail = async (order, address) => {
     try {
+        const moneyPrefix = getMoneyPrefix(order)
         const emailHTML = `
         <!DOCTYPE html>
         <html>
@@ -250,7 +292,7 @@ const sendOrderConfirmationEmail = async (order, address) => {
                     <h3 style="color: #333; margin-bottom: 10px;">Order Items</h3>
                     <table>
                         <thead><tr><th>Product</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th></tr></thead>
-                        <tbody>${getItemsHTML(order.items)}</tbody>
+                        <tbody>${getItemsHTML(order.items, moneyPrefix)}</tbody>
                     </table>
                     ${getTotalHTML(order)}
                 </div>
@@ -279,6 +321,7 @@ const sendOrderConfirmationEmail = async (order, address) => {
 const sendOrderAcceptedEmail = async (order) => {
     try {
         const address = order.address
+        const moneyPrefix = getMoneyPrefix(order)
         const emailHTML = `
         <!DOCTYPE html>
         <html>
@@ -311,7 +354,7 @@ const sendOrderAcceptedEmail = async (order) => {
                     <h3 style="color: #333; margin-bottom: 10px;">Order Items</h3>
                     <table>
                         <thead><tr><th>Product</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th></tr></thead>
-                        <tbody>${getItemsHTML(order.items)}</tbody>
+                        <tbody>${getItemsHTML(order.items, moneyPrefix)}</tbody>
                     </table>
                     ${getTotalHTML(order)}
                 </div>
@@ -339,6 +382,7 @@ const sendOrderAcceptedEmail = async (order) => {
 const sendInvoiceEmail = async (order) => {
     try {
         const address = order.address
+        const moneyPrefix = getMoneyPrefix(order)
         const emailHTML = `
         <!DOCTYPE html>
         <html>
@@ -359,13 +403,13 @@ const sendInvoiceEmail = async (order) => {
                     <div class="info-grid">
                         <div class="info-box"><h4>Order Date</h4><p>${new Date(order.date).toLocaleDateString()}</p></div>
                         <div class="info-box"><h4>Payment Method</h4><p>${order.paymentMethod}</p></div>
-                        <div class="info-box"><h4>Total</h4><p>${currency}${order.amount}</p></div>
+                        <div class="info-box"><h4>Total</h4><p>${moneyPrefix}${Number(order.amount || 0).toFixed(2)}</p></div>
                         <div class="info-box"><h4>Payment Status</h4><p>${order.payment ? '✅ Paid' : '⏳ Pending'}</p></div>
                     </div>
                     <h3 style="color: #333; margin-bottom: 10px;">Order Items</h3>
                     <table>
                         <thead><tr><th>Product</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th></tr></thead>
-                        <tbody>${getItemsHTML(order.items)}</tbody>
+                        <tbody>${getItemsHTML(order.items, moneyPrefix)}</tbody>
                     </table>
                     ${getTotalHTML(order)}
                 </div>
@@ -394,6 +438,7 @@ const sendInvoiceEmail = async (order) => {
 const sendOrderDeliveredEmail = async (order) => {
     try {
         const address = order.address
+        const moneyPrefix = getMoneyPrefix(order)
         const emailHTML = `
         <!DOCTYPE html>
         <html>
@@ -426,7 +471,7 @@ const sendOrderDeliveredEmail = async (order) => {
                     <h3 style="color: #333; margin-bottom: 10px;">Order Items</h3>
                     <table>
                         <thead><tr><th>Product</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th></tr></thead>
-                        <tbody>${getItemsHTML(order.items)}</tbody>
+                        <tbody>${getItemsHTML(order.items, moneyPrefix)}</tbody>
                     </table>
                     ${getTotalHTML(order)}
                     <div style="background: #fff8e1; border: 1px solid #ffc107; border-radius: 6px; padding: 15px; text-align: center; margin-top: 20px;">
@@ -471,7 +516,7 @@ const sendSMSReceipt = async (order, phone, customText) => {
             formattedPhone = '+880' + formattedPhone
         }
 
-        const baseMessage = `BLOOP Order!\nInvoice: ${order.invoiceNumber}\nItems: ${order.items.map(i => i.name).join(', ')}\nTotal: ${currency}${order.amount}\nThank you for shopping with BLOOP!`
+        const baseMessage = `BLOOP Order!\nInvoice: ${order.invoiceNumber}\nItems: ${order.items.map(i => i.name).join(', ')}\nTotal: ${formatMoney(order, order.amount)}\nThank you for shopping with BLOOP!`
         const smsMessage = customText || baseMessage
 
         const provider = (process.env.SMS_PROVIDER || 'log').toLowerCase()
@@ -557,7 +602,19 @@ const sendSMSReceipt = async (order, phone, customText) => {
 // Placing order using COD Method
 const placeOrder = async (req, res) => {
     try {
-        const { userId, items, address, amount, couponCode, clientOrderId } = req.body
+        const {
+            userId,
+            items,
+            address,
+            amount,
+            couponCode,
+            clientOrderId,
+            shippingRegion = 'domestic',
+            shippingMethod = 'standard',
+            deliverySlot = '',
+            scheduledDeliveryAt = null,
+            currencyCode = 'BDT'
+        } = req.body
 
         const existingOrder = await findExistingOrderByClientOrderId(userId, clientOrderId, 'COD')
         if (existingOrder) {
@@ -574,7 +631,8 @@ const placeOrder = async (req, res) => {
         }
 
         const { sanitizedItems, subtotal, productDiscount } = await normalizeOrderItems(items)
-        const amountBeforeCoupon = parseFloat((subtotal + deliveryCharge).toFixed(2))
+        const shipping = resolveShippingOption(shippingRegion, shippingMethod)
+        const amountBeforeCoupon = parseFloat((subtotal + Number(shipping.fee || deliveryCharge)).toFixed(2))
         const { normalizedCouponCode, couponDiscount } = await getCouponDiscountAmount(couponCode, amountBeforeCoupon)
         const finalAmount = parseFloat((amountBeforeCoupon - couponDiscount).toFixed(2))
 
@@ -595,6 +653,12 @@ const placeOrder = async (req, res) => {
             couponDiscount,
             couponCode: normalizedCouponCode,
             productDiscount: productDiscount > 0 ? productDiscount : 0,
+            shippingMethod: shipping.method,
+            shippingRegion,
+            shippingFee: Number(shipping.fee || deliveryCharge),
+            deliverySlot,
+            scheduledDeliveryAt: scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : null,
+            currencyCode,
             paymentMethod: "COD",
             payment: false,
             date: Date.now(),
@@ -624,7 +688,19 @@ const placeOrder = async (req, res) => {
 // Placing order using Stripe Method
 const placeOrderStripe = async (req, res) => {
     try {
-        const { userId, items, address, amount, couponCode, clientOrderId } = req.body
+        const {
+            userId,
+            items,
+            address,
+            amount,
+            couponCode,
+            clientOrderId,
+            shippingRegion = 'domestic',
+            shippingMethod = 'standard',
+            deliverySlot = '',
+            scheduledDeliveryAt = null,
+            currencyCode = 'BDT'
+        } = req.body
         const { origin } = req.headers
 
         const existingOrder = await findExistingOrderByClientOrderId(userId, clientOrderId, 'stripe')
@@ -642,7 +718,8 @@ const placeOrderStripe = async (req, res) => {
         }
 
         const { sanitizedItems, subtotal, productDiscount } = await normalizeOrderItems(items)
-        const amountBeforeCoupon = parseFloat((subtotal + deliveryCharge).toFixed(2))
+        const shipping = resolveShippingOption(shippingRegion, shippingMethod)
+        const amountBeforeCoupon = parseFloat((subtotal + Number(shipping.fee || deliveryCharge)).toFixed(2))
         const { normalizedCouponCode, couponDiscount } = await getCouponDiscountAmount(couponCode, amountBeforeCoupon)
         const finalAmount = parseFloat((amountBeforeCoupon - couponDiscount).toFixed(2))
 
@@ -655,6 +732,12 @@ const placeOrderStripe = async (req, res) => {
             couponDiscount,
             couponCode: normalizedCouponCode,
             productDiscount: productDiscount > 0 ? productDiscount : 0,
+            shippingMethod: shipping.method,
+            shippingRegion,
+            shippingFee: Number(shipping.fee || deliveryCharge),
+            deliverySlot,
+            scheduledDeliveryAt: scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : null,
+            currencyCode,
             paymentMethod: "stripe",
             payment: false,
             date: Date.now(),
@@ -667,7 +750,7 @@ const placeOrderStripe = async (req, res) => {
 
         const line_items = sanitizedItems.map((item) => ({
             price_data: {
-                currency: currency,
+                currency: String(currencyCode || DEFAULT_CURRENCY_CODE).toLowerCase(),
                 product_data: { name: item.name },
                 unit_amount: Math.round(item.price * 100)
             },
@@ -676,9 +759,9 @@ const placeOrderStripe = async (req, res) => {
 
         line_items.push({
             price_data: {
-                currency: currency,
+                currency: String(currencyCode || DEFAULT_CURRENCY_CODE).toLowerCase(),
                 product_data: { name: 'Delivery Charges' },
-                unit_amount: deliveryCharge * 100
+                unit_amount: Math.round(Number(shipping.fee || deliveryCharge) * 100)
             },
             quantity: 1
         })
@@ -766,6 +849,17 @@ const verifyStripe = async (req, res) => {
     }
 }
 
+const getShippingOptions = async (req, res) => {
+    try {
+        const { region = 'domestic' } = req.query
+        const options = SHIPPING_OPTIONS[region] || SHIPPING_OPTIONS.domestic
+        res.json({ success: true, options })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
 // All orders data for admin panel
 const allOrders = async (req, res) => {
     try {
@@ -795,6 +889,15 @@ const updateStatus = async (req, res) => {
         const { orderId, status, cancelReason } = req.body
         const adminName = req.adminName || 'Admin'
 
+        const existingOrder = await orderModel.findById(orderId)
+        if (!existingOrder) {
+            return res.json({ success: false, message: 'Order not found' })
+        }
+
+        if (existingOrder.status === status) {
+            return res.json({ success: true, duplicate: true, message: 'Status already set', order: existingOrder })
+        }
+
         let updateData = { status, lastActionBy: adminName }
         if (status === "Cancelled" && cancelReason) {
             updateData.cancelReason = cancelReason
@@ -819,7 +922,7 @@ const updateStatus = async (req, res) => {
             { new: true }
         )
 
-        if (status === 'Delivered' && updatedOrder) {
+        if (status === 'Delivered' && updatedOrder && existingOrder.status !== 'Delivered') {
             await sendOrderDeliveredEmail(updatedOrder)
         }
 
@@ -835,6 +938,15 @@ const acceptOrder = async (req, res) => {
     try {
         const { orderId, accepted, rejectedReason, notify } = req.body
         const adminName = req.adminName || 'Admin'
+
+        const existingOrder = await orderModel.findById(orderId)
+        if (!existingOrder) {
+            return res.json({ success: false, message: 'Order not found' })
+        }
+
+        if (existingOrder.accepted === accepted) {
+            return res.json({ success: true, duplicate: true, message: `Order already ${accepted}` })
+        }
 
         let updateData = { accepted, lastActionBy: adminName }
         if (accepted === 'rejected' && rejectedReason) {
@@ -870,7 +982,7 @@ const acceptOrder = async (req, res) => {
                     await sendSMSReceipt(
                         updatedOrder,
                         updatedOrder.address.phone,
-                        `BLOOP: Your order ${updatedOrder.invoiceNumber} is confirmed! Total: ${currency}${updatedOrder.amount}. Thank you for shopping with BLOOP!`
+                        `BLOOP: Your order ${updatedOrder.invoiceNumber} is confirmed! Total: ${formatMoney(updatedOrder, updatedOrder.amount)}. Thank you for shopping with BLOOP!`
                     )
                 }
             }
@@ -920,18 +1032,24 @@ const sendInvoice = async (req, res) => {
         const order = await orderModel.findById(orderId)
         if (!order) return res.json({ success: false, message: 'Order not found' })
 
+        const invoiceAction = `invoice:${method || 'email'}`
+        if (wasRecentAction(order, invoiceAction, 20000)) {
+            return res.json({ success: true, duplicate: true, message: 'Invoice already sent recently' })
+        }
+
         if (method === 'sms') {
             if (!order.address?.phone) return res.json({ success: false, message: 'Phone number not found' })
             await sendSMSReceipt(
                 order,
                 order.address.phone,
-                `BLOOP Bill Voucher!\nInvoice: ${order.invoiceNumber}\nTotal: ৳${order.amount}\nPayment: ${order.payment ? 'Paid' : 'Pending'}\nThank you!`
+                `BLOOP Bill Voucher!\nInvoice: ${order.invoiceNumber}\nTotal: ${formatMoney(order, order.amount)}\nPayment: ${order.payment ? 'Paid' : 'Pending'}\nThank you!`
             )
         } else {
             // Generate PDF and send via email
             const pdfBuffer = await generatePDFBuffer(order)
             const address = order.address
 
+            const moneyPrefix = getMoneyPrefix(order)
             const emailHTML = `
             <!DOCTYPE html>
             <html>
@@ -951,14 +1069,14 @@ const sendInvoice = async (req, res) => {
                         <p style="color: #666; font-size: 14px;">Please find your bill voucher attached as PDF.</p>
                         <div class="info-grid">
                             <div class="info-box"><h4>Invoice</h4><p>${order.invoiceNumber}</p></div>
-                            <div class="info-box"><h4>Total</h4><p>৳${order.amount}</p></div>
+                            <div class="info-box"><h4>Total</h4><p>${moneyPrefix}${Number(order.amount || 0).toFixed(2)}</p></div>
                             <div class="info-box"><h4>Payment</h4><p>${order.payment ? '✅ Paid' : '⏳ Pending'}</p></div>
                             <div class="info-box"><h4>Method</h4><p>${order.paymentMethod}</p></div>
                         </div>
                         <h3 style="color: #333; margin-bottom: 10px;">Order Items</h3>
                         <table>
                             <thead><tr><th>Product</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th></tr></thead>
-                            <tbody>${getItemsHTML(order.items)}</tbody>
+                            <tbody>${getItemsHTML(order.items, moneyPrefix)}</tbody>
                         </table>
                         ${getTotalHTML(order)}
                     </div>
@@ -990,7 +1108,7 @@ const sendInvoice = async (req, res) => {
             lastActionBy: adminName,
             $push: {
                 actionHistory: {
-                    action: `invoice:${method || 'email'}`,
+                    action: invoiceAction,
                     adminName,
                     note: '',
                     at: new Date()
@@ -1041,6 +1159,7 @@ const generatePDFBuffer = (order) => {
         doc.text(`Status: ${order.status}`, 50, 130)
         doc.text(`Payment: ${order.payment ? 'Paid' : 'Pending'}`, 350, 100)
         doc.text(`Method: ${order.paymentMethod}`, 350, 115)
+        doc.text(`Currency: ${getOrderCurrencyCode(order)}`, 350, 130)
 
         // Divider
         doc.moveTo(50, 150).lineTo(562, 150).stroke('#cccccc')
@@ -1052,6 +1171,8 @@ const generatePDFBuffer = (order) => {
         doc.text(`Address: ${order.address.street}, ${order.address.city}, ${order.address.country} - ${order.address.zipcode}`, 50, 197)
         doc.text(`Phone: ${order.address.phone}`, 50, 212)
         doc.text(`Email: ${order.address.email}`, 50, 227)
+        doc.text(`Shipping: ${order.shippingRegion || 'domestic'} / ${order.shippingMethod || 'standard'}`, 350, 212)
+        doc.text(`Slot: ${order.deliverySlot || 'anytime'}`, 350, 227)
 
         // Divider
         doc.moveTo(50, 245).lineTo(562, 245).stroke('#cccccc')
@@ -1077,8 +1198,8 @@ const generatePDFBuffer = (order) => {
             doc.text(item.name.substring(0, 30), 55, y)
             doc.text(item.size, 280, y)
             doc.text(item.quantity.toString(), 340, y)
-            doc.text(`৳${item.price}`, 400, y)
-            doc.text(`৳${(item.price * item.quantity).toFixed(2)}`, 470, y)
+            doc.text(formatMoney(order, item.price), 400, y)
+            doc.text(formatMoney(order, item.price * item.quantity), 470, y)
             y += 20
         })
 
@@ -1089,25 +1210,25 @@ const generatePDFBuffer = (order) => {
 
         doc.fontSize(10)
         const subtotal = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0)
-        doc.text(`Subtotal: ৳${subtotal.toFixed(2)}`, 350, y)
+        doc.text(`Subtotal: ${formatMoney(order, subtotal)}`, 350, y)
         y += 15
-        doc.text(`Delivery: ৳70`, 350, y)
+        doc.text(`Delivery: ${formatMoney(order, Number(order.shippingFee ?? deliveryCharge))}`, 350, y)
         y += 15
 
         if (order.couponDiscount > 0) {
-            doc.fillColor('#00aa00').text(`Coupon: -৳${order.couponDiscount}`, 350, y)
+            doc.fillColor('#00aa00').text(`Coupon: -${formatMoney(order, order.couponDiscount)}`, 350, y)
             doc.fillColor('#000000')
             y += 15
         }
 
         if (order.productDiscount > 0) {
-            doc.fillColor('#00aa00').text(`Product Discount: -৳${order.productDiscount}`, 350, y)
+            doc.fillColor('#00aa00').text(`Product Discount: -${formatMoney(order, order.productDiscount)}`, 350, y)
             doc.fillColor('#000000')
             y += 15
         }
 
         doc.font('Helvetica-Bold').fontSize(12)
-        doc.text(`Total: ৳${order.amount}`, 350, y + 5)
+        doc.text(`Total: ${formatMoney(order, order.amount)}`, 350, y + 5)
         doc.font('Helvetica')
 
         // Footer
@@ -1127,5 +1248,5 @@ const generatePDFBuffer = (order) => {
 export {
     verifyStripe, allOrders, placeOrder, placeOrderStripe,
     updateStatus, userOrders, acceptOrder, markAsPaid,
-    getPendingOrders, sendInvoice
+    getPendingOrders, sendInvoice, getShippingOptions
 }

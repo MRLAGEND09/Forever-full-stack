@@ -2,7 +2,7 @@ import express from 'express'
 import {
     allOrders, placeOrder, placeOrderStripe,
     updateStatus, userOrders, verifyStripe,
-    acceptOrder, markAsPaid, getPendingOrders, sendInvoice
+    acceptOrder, markAsPaid, getPendingOrders, sendInvoice, getShippingOptions
 } from '../controllers/orderController.js'
 import adminAuth from '../middleware/adminAuth.js'
 import authUser from '../middleware/auth.js'
@@ -19,6 +19,7 @@ orderRouter.post('/pending', adminAuth, getPendingOrders)
 // Payment features
 orderRouter.post('/place', authUser, placeOrder)
 orderRouter.post('/stripe', authUser, placeOrderStripe)
+orderRouter.get('/shipping-options', getShippingOptions)
 
 // User features
 orderRouter.post('/user-orders', authUser, userOrders)

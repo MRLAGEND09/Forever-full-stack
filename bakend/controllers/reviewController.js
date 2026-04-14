@@ -1,10 +1,23 @@
 import reviewModel from "../models/reviewModel.js";
 import productModel from "../models/productModel.js";
+import orderModel from "../models/orderModel.js";
 
 // Add a review
 const addReview = async (req, res) => {
     try {
-        const { userId, productId, orderId, rating, comment } = req.body;
+        const { userId, productId, orderId, rating, comment, photoUrls = [] } = req.body;
+
+        const order = await orderModel.findOne({ _id: orderId, userId }).lean()
+        if (!order) {
+            return res.json({ success: false, message: "Order not found for this user" })
+        }
+
+        const hasProduct = (order.items || []).some((item) => String(item._id || item.productId) === String(productId))
+        if (!hasProduct) {
+            return res.json({ success: false, message: "This product is not part of the selected order" })
+        }
+
+        const verifiedPurchase = ['Delivered', 'Shipped', 'Out For Delivery', 'Processing', 'Order Placed'].includes(order.status)
 
         // Check if user already reviewed this product from this specific order
         const existingReview = await reviewModel.findOne({ userId, productId, orderId });
@@ -17,7 +30,9 @@ const addReview = async (req, res) => {
             productId,
             orderId,
             rating,
-            comment
+            comment,
+            photoUrls: Array.isArray(photoUrls) ? photoUrls.slice(0, 4) : [],
+            verifiedPurchase
         });
 
         await review.save();

@@ -27,6 +27,14 @@ const reviewSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    photoUrls: {
+        type: [String],
+        default: []
+    },
+    verifiedPurchase: {
+        type: Boolean,
+        default: false
+    },
     date: {
         type: Date,
         default: Date.now
