@@ -5,7 +5,23 @@ import { ShopContext } from '../context/ShopContext'
 
 const Navbar = () => {
   const [visible, setVisible] = useState(false)
- const { setShowSearch, getCartCount, navigate, token, setToken, setCartItems, userInfo, setUserInfo } = useContext(ShopContext)
+ const {
+  setShowSearch,
+  getCartCount,
+  navigate,
+  token,
+  setToken,
+  setCartItems,
+  userInfo,
+  setUserInfo,
+  selectedCurrency,
+  updateCurrency,
+  selectedLanguage,
+  updateLanguage,
+  selectedRegion,
+  updateRegion,
+  t
+ } = useContext(ShopContext)
 
   const logout = () => {
     navigate('/login')
@@ -21,24 +37,55 @@ const Navbar = () => {
 
       <ul className='hidden sm:flex gap-5 text-sm text-gray-700'>
         <NavLink to='/' className='flex flex-col items-center gap-1'>
-          <p>HOME</p>
+          <p>{t('home')}</p>
           <hr className='w-2/4 border-none h-[1.5px] bg-gray-700 hidden' />
         </NavLink>
         <NavLink to='/collection' className='flex flex-col items-center gap-1'>
-          <p>COLLECTION</p>
+          <p>{t('collection')}</p>
           <hr className='w-2/4 border-none h-[1.5px] bg-gray-700 hidden' />
         </NavLink>
         <NavLink to='/about' className='flex flex-col items-center gap-1'>
-          <p>ABOUT</p>
+          <p>{t('about')}</p>
           <hr className='w-2/4 border-none h-[1.5px] bg-gray-700 hidden' />
         </NavLink>
         <NavLink to='/contact' className='flex flex-col items-center gap-1'>  
-          <p>CONTACT</p>
+          <p>{t('contact')}</p>
           <hr className='w-2/4 border-none h-[1.5px] bg-gray-700 hidden' />
         </NavLink>
       </ul>
 
       <div className='flex items-center gap-6'>
+       <select
+          value={selectedLanguage}
+          onChange={(e) => updateLanguage(e.target.value)}
+          className='hidden md:block text-xs border px-1 py-1 bg-white'
+        >
+          <option value='en'>EN</option>
+          <option value='bn'>BN</option>
+          <option value='hi'>HI</option>
+        </select>
+
+        <select
+          value={selectedCurrency}
+          onChange={(e) => updateCurrency(e.target.value)}
+          className='hidden md:block text-xs border px-1 py-1 bg-white'
+        >
+          <option value='BDT'>BDT</option>
+          <option value='USD'>USD</option>
+          <option value='INR'>INR</option>
+        </select>
+
+        <select
+          value={selectedRegion}
+          onChange={(e) => updateRegion(e.target.value)}
+          className='hidden md:block text-xs border px-1 py-1 bg-white'
+        >
+          <option value='global'>Global</option>
+          <option value='domestic'>Bangladesh</option>
+          <option value='south_asia'>South Asia</option>
+          <option value='international'>International</option>
+        </select>
+
        <img onClick={() => setShowSearch(true)} src={assets.search_icon} className='w-5 cursor-pointer' alt="" />
 
         <div className='group relative'>

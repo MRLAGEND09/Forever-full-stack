@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 
 const ProductItem = ({ id, image, name, price, discount, discountActive }) => {
-  const { currency, token, addToWishlist, removeFromWishlist, isInWishlist, backendUrl } = useContext(ShopContext)
+  const { currency, token, addToWishlist, removeFromWishlist, isInWishlist, backendUrl, convertPrice } = useContext(ShopContext)
   const [reviews, setReviews] = useState([])
   const [averageRating, setAverageRating] = useState(0)
 
@@ -49,6 +49,9 @@ const ProductItem = ({ id, image, name, price, discount, discountActive }) => {
     ? (price - (price * discount / 100)).toFixed(2)
     : null
 
+  const finalPrice = discountedPrice ? convertPrice(discountedPrice) : convertPrice(price)
+  const originalPrice = convertPrice(price)
+
   return (
     <Link className='text-gray-700 cursor-pointer' to={`/product/${id}`}>
       <div className='overflow-hidden relative'>
@@ -74,11 +77,11 @@ const ProductItem = ({ id, image, name, price, discount, discountActive }) => {
       <p className='pt-3 pb-1 text-sm'>{name}</p>
       {discountedPrice ? (
         <div className='flex items-center gap-2'>
-          <p className='text-sm font-medium text-red-500'>{currency}{discountedPrice}</p>
-          <p className='text-xs text-gray-400 line-through'>{currency}{price}</p>
+          <p className='text-sm font-medium text-red-500'>{currency}{finalPrice}</p>
+          <p className='text-xs text-gray-400 line-through'>{currency}{originalPrice}</p>
         </div>
       ) : (
-        <p className='text-sm font-medium'>{currency}{price}</p>
+        <p className='text-sm font-medium'>{currency}{finalPrice}</p>
       )}
       {reviews.length > 0 && (
         <div className='flex items-center gap-2 mt-2'>

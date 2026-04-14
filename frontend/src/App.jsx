@@ -19,6 +19,7 @@ import ScrollToTop from "./components/ScrollToTop";
 import Profile from './Pages/Profile'
 import Wishlist from './Pages/Wishlist'
 import ProtectedRoute from './components/ProtectedRoute'
+import AIChatbot from './components/AIChatbot'
 
 const App = () => {
   return (
@@ -41,6 +42,7 @@ const App = () => {
         <Route path="/verify" element={<Verify />} />
         <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
       </Routes>
+      <AIChatbot />
       <Footer />
     </div>
   );

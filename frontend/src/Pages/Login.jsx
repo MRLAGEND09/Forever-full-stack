@@ -124,6 +124,15 @@ const Login = () => {
           <i className='fab fa-facebook text-white text-lg'></i>
           <span className='text-sm font-medium'>Continue with Facebook</span>
         </button>
+
+        <button
+          type='button'
+          onClick={() => toast.info('Instagram login can be enabled after adding Instagram OAuth app keys in Firebase/Auth provider settings.')}
+          className='w-full flex items-center justify-center gap-3 bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white py-2.5 px-4 transition'
+        >
+          <i className='fab fa-instagram text-white text-lg'></i>
+          <span className='text-sm font-medium'>Continue with Instagram</span>
+        </button>
       </div>
 
       {/* Divider */}

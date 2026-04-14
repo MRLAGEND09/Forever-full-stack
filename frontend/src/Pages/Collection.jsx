@@ -7,12 +7,18 @@ import { toast } from 'react-toastify'
 import { useLocation } from 'react-router-dom'
 
 const Collection = () => {
-  const { products, search, showSearch, token, navigate } = useContext(ShopContext)
+  const { products, search, showSearch, token, navigate, searchProductsAdvanced } = useContext(ShopContext)
   const [showFilter, setShowFilter] = useState(false)
   const [filterproducts, setFilterProducts] = useState([])
   const [category, setCategory] = useState([])
   const [subCategory, setSubCategory] = useState([])
   const [selectedCollection, setSelectedCollection] = useState('')
+  const [selectedBrands, setSelectedBrands] = useState([])
+  const [selectedSizes, setSelectedSizes] = useState([])
+  const [selectedColors, setSelectedColors] = useState([])
+  const [priceMin, setPriceMin] = useState('')
+  const [priceMax, setPriceMax] = useState('')
+  const [minRating, setMinRating] = useState('')
   const [sortType, setSortType] = useState('relevant')
   const [failedLogos, setFailedLogos] = useState({})
   const location = useLocation()
@@ -40,63 +46,76 @@ const Collection = () => {
     }
   }
 
-  const applyFilter = () => {
-    let productsCopy = products.slice()
+  const toggleArrayValue = (value, setter) => {
+    setter((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]))
+  }
 
-    // showInCollection filter — admin off করলে দেখাবে না
+  const applyFilter = async () => {
+    const hasActiveSearchOrFilters = Boolean(
+      (showSearch && search) ||
+      category.length ||
+      subCategory.length ||
+      selectedBrands.length ||
+      selectedSizes.length ||
+      selectedColors.length ||
+      priceMin ||
+      priceMax ||
+      minRating ||
+      selectedCollection ||
+      sortType !== 'relevant'
+    )
+
+    const apiProducts = await searchProductsAdvanced({
+      q: showSearch ? search : '',
+      category: category.length === 1 ? category[0] : '',
+      subCategory: subCategory.length === 1 ? subCategory[0] : '',
+      brands: selectedBrands,
+      colors: selectedColors,
+      sizes: selectedSizes,
+      minPrice: priceMin,
+      maxPrice: priceMax,
+      minRating,
+      sort: sortType === 'relevant' ? 'relevance' : sortType === 'rating' ? 'rating-desc' : sortType === 'low-high' ? 'price-asc' : 'price-desc'
+    })
+
+    let productsCopy = hasActiveSearchOrFilters ? apiProducts : products.slice()
+
     if (!selectedCollection) {
-      productsCopy = productsCopy.filter(item => item.showInCollection)
+      productsCopy = productsCopy.filter((item) => item.showInCollection)
     }
 
-    // Collection filter
     if (selectedCollection) {
-      productsCopy = productsCopy.filter(item =>
-        item.collections && item.collections.includes(selectedCollection)
-      )
+      productsCopy = productsCopy.filter((item) => item.collections && item.collections.includes(selectedCollection))
     }
 
-    // Search filter
-    if (showSearch && search) {
-      productsCopy = productsCopy.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase())
-      )
+    if (category.length > 1) {
+      productsCopy = productsCopy.filter((item) => category.includes(item.category))
     }
 
-    // Category filter
-    if (category.length > 0) {
-      productsCopy = productsCopy.filter(item => category.includes(item.category))
-    }
-
-    // SubCategory filter
-    if (subCategory.length > 0) {
-      productsCopy = productsCopy.filter(item => subCategory.includes(item.subCategory))
+    if (subCategory.length > 1) {
+      productsCopy = productsCopy.filter((item) => subCategory.includes(item.subCategory))
     }
 
     setFilterProducts(productsCopy)
   }
 
-  const sortProducts = () => {
-    let fpCopy = filterproducts.slice()
-    switch (sortType) {
-      case 'low-high':
-        setFilterProducts(fpCopy.sort((a, b) => a.price - b.price))
-        break
-      case 'high-low':
-        setFilterProducts(fpCopy.sort((a, b) => b.price - a.price))
-        break
-      default:
-        applyFilter()
-        break
-    }
-  }
-
   useEffect(() => {
     applyFilter()
-  }, [category, subCategory, search, showSearch, products, selectedCollection])
-
-  useEffect(() => {
-    sortProducts()
-  }, [sortType])
+  }, [
+    category,
+    subCategory,
+    search,
+    showSearch,
+    products,
+    selectedCollection,
+    selectedBrands,
+    selectedSizes,
+    selectedColors,
+    priceMin,
+    priceMax,
+    minRating,
+    sortType
+  ])
 
   useEffect(() => {
     if (!token) {
@@ -118,6 +137,10 @@ const Collection = () => {
     { value: 'lacoste', label: 'Lacoste', logoSrc: assets.lacoste_logo, short: 'LA' },
     { value: 'ralph-lauren', label: 'Ralph Lauren', logoSrc: assets.ralph_lauren_logo, short: 'RL' },
   ]
+
+  const availableBrands = [...new Set(products.map((item) => item.brand).filter(Boolean))]
+  const availableSizes = [...new Set(products.flatMap((item) => item.sizes || []))]
+  const availableColors = [...new Set(products.flatMap((item) => item.colors || []))]
 
   return (
     <div className='flex flex-col sm:flex-row gap-1 sm:gap-10 pt-10 border-t'>
@@ -187,6 +210,95 @@ const Collection = () => {
             </p>
           </div>
         </div>
+
+        <div className={`border border-gray-300 pl-5 py-3 my-5 ${showFilter ? '' : 'hidden'} sm:block`}>
+          <p className='mb-3 text-sm font-medium'>PRICE RANGE</p>
+          <div className='flex gap-2 pr-4'>
+            <input
+              type='number'
+              value={priceMin}
+              onChange={(e) => setPriceMin(e.target.value)}
+              placeholder='Min'
+              className='w-full border px-2 py-1 text-sm'
+            />
+            <input
+              type='number'
+              value={priceMax}
+              onChange={(e) => setPriceMax(e.target.value)}
+              placeholder='Max'
+              className='w-full border px-2 py-1 text-sm'
+            />
+          </div>
+        </div>
+
+        <div className={`border border-gray-300 pl-5 py-3 my-5 ${showFilter ? '' : 'hidden'} sm:block`}>
+          <p className='mb-3 text-sm font-medium'>RATING</p>
+          <select
+            value={minRating}
+            onChange={(e) => setMinRating(e.target.value)}
+            className='border px-2 py-1 text-sm mr-4'
+          >
+            <option value=''>Any</option>
+            <option value='4'>4+ stars</option>
+            <option value='3'>3+ stars</option>
+            <option value='2'>2+ stars</option>
+          </select>
+        </div>
+
+        {availableBrands.length > 0 && (
+          <div className={`border border-gray-300 pl-5 py-3 my-5 ${showFilter ? '' : 'hidden'} sm:block`}>
+            <p className='mb-3 text-sm font-medium'>BRAND</p>
+            <div className='flex flex-col gap-2 text-sm font-light text-gray-700'>
+              {availableBrands.slice(0, 10).map((brand) => (
+                <label key={brand} className='flex gap-2'>
+                  <input
+                    className='w-3'
+                    type='checkbox'
+                    checked={selectedBrands.includes(brand)}
+                    onChange={() => toggleArrayValue(brand, setSelectedBrands)}
+                  />
+                  {brand}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {availableSizes.length > 0 && (
+          <div className={`border border-gray-300 pl-5 py-3 my-5 ${showFilter ? '' : 'hidden'} sm:block`}>
+            <p className='mb-3 text-sm font-medium'>SIZE</p>
+            <div className='flex flex-wrap gap-2 pr-4'>
+              {availableSizes.map((size) => (
+                <button
+                  type='button'
+                  key={size}
+                  onClick={() => toggleArrayValue(size, setSelectedSizes)}
+                  className={`px-2 py-1 border text-xs ${selectedSizes.includes(size) ? 'bg-black text-white' : 'bg-white'}`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {availableColors.length > 0 && (
+          <div className={`border border-gray-300 pl-5 py-3 my-5 ${showFilter ? '' : 'hidden'} sm:block`}>
+            <p className='mb-3 text-sm font-medium'>COLOR</p>
+            <div className='flex flex-wrap gap-2 pr-4'>
+              {availableColors.slice(0, 12).map((color) => (
+                <button
+                  type='button'
+                  key={color}
+                  onClick={() => toggleArrayValue(color, setSelectedColors)}
+                  className={`px-2 py-1 border text-xs rounded ${selectedColors.includes(color) ? 'bg-black text-white' : 'bg-white'}`}
+                >
+                  {color}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* right side */}
@@ -200,6 +312,7 @@ const Collection = () => {
             <option value="relevant">sort by: Relevant</option>
             <option value="low-high">sort by: Low to High</option>
             <option value="high-low">sort by: High to Low</option>
+            <option value="rating">sort by: Top Rated</option>
           </select>
         </div>
 
@@ -215,7 +328,7 @@ const Collection = () => {
                 id={item._id}
                 image={item.image}
                 name={item.name}
-                price={item.price}
+                price={item.dynamicPrice || item.price}
                 discount={item.discount}
                 discountActive={item.discountActive}
               />

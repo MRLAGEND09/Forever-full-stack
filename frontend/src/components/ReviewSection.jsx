@@ -12,6 +12,7 @@ const ReviewSection = ({ productId }) => {
   const [userOrders, setUserOrders] = useState([])
   const [canReview, setCanReview] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState(null)
+  const [photoUrlsText, setPhotoUrlsText] = useState('')
 
   const fetchReviews = async () => {
     try {
@@ -77,17 +78,25 @@ const ReviewSection = ({ productId }) => {
     }
 
     try {
+      const photoUrls = photoUrlsText
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 4)
+
       const response = await axios.post(backendUrl + '/api/review/add', {
         productId,
         orderId: selectedOrderId,
         rating,
-        comment
+        comment,
+        photoUrls
       }, { headers: { token } })
 
       if (response.data.success) {
         toast.success('Review added successfully!')
         setComment('')
         setRating(5)
+        setPhotoUrlsText('')
         setShowForm(false)
         fetchReviews()
         fetchUserOrders()
@@ -157,6 +166,15 @@ const ReviewSection = ({ productId }) => {
               placeholder='Share your thoughts about this product...'
             />
           </div>
+          <div className='mb-4'>
+            <label className='block text-sm font-medium mb-2'>Photo URLs (optional, comma separated)</label>
+            <input
+              value={photoUrlsText}
+              onChange={(e) => setPhotoUrlsText(e.target.value)}
+              className='w-full p-3 border rounded'
+              placeholder='https://image1.jpg, https://image2.jpg'
+            />
+          </div>
           <button
             onClick={submitReview}
             className='bg-black text-white px-6 py-2 rounded hover:bg-gray-800'
@@ -176,7 +194,7 @@ const ReviewSection = ({ productId }) => {
               const product = products.find(p => p._id === productId)
               const productDiscount = product?.discount || 0
               return (
-                <div key={index} className='border-b pb-4 last:border-b-0'>
+                <div key={review._id || `${review.userId?._id || review.userId}-${review.date || index}`} className='border-b pb-4 last:border-b-0'>
                   <div className='flex items-center justify-between mb-2'>
                     <div className='flex items-center gap-3'>
                       <span className='font-medium text-gray-800'>{review.userId.name}</span>
@@ -185,6 +203,9 @@ const ReviewSection = ({ productId }) => {
                       </div>
                     </div>
                     <div className='flex items-center gap-3'>
+                      {review.verifiedPurchase && (
+                        <span className='text-[11px] px-2 py-1 rounded bg-green-100 text-green-700'>Verified Purchase</span>
+                      )}
                       {product && productDiscount > 0 && (
                         <span className='bg-red-100 text-red-600 font-semibold px-2 py-1 rounded text-sm'>
                           {productDiscount}% OFF
@@ -196,6 +217,13 @@ const ReviewSection = ({ productId }) => {
                     </div>
                   </div>
                   <p className='text-gray-600 mb-2'>{review.comment}</p>
+                  {Array.isArray(review.photoUrls) && review.photoUrls.length > 0 && (
+                    <div className='flex flex-wrap gap-2 mb-2'>
+                      {review.photoUrls.map((url, photoIndex) => (
+                        <img key={`${url}-${photoIndex}`} src={url} alt='review' className='w-16 h-16 object-cover rounded border' />
+                      ))}
+                    </div>
+                  )}
                   <p className='text-xs text-gray-400'>
                     {new Date(review.date).toLocaleDateString()}
                   </p>

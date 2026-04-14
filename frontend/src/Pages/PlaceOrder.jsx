@@ -23,7 +23,15 @@ const COUNTRY_OPTIONS = [
 
 const PlaceOrder = () => {
   const [method, setMethod] = useState('cod');
-  const { navigate, backendUrl, token, cartItems, setCartItems, getCartAmount, delivery_fee, products } = useContext(ShopContext);
+  const { navigate, backendUrl, token, cartItems, setCartItems, getCartAmount, delivery_fee, products, currency, convertPrice } = useContext(ShopContext);
+  const [shippingRegion, setShippingRegion] = useState('domestic')
+  const [shippingMethod, setShippingMethod] = useState('standard')
+  const [shippingOptions, setShippingOptions] = useState([])
+  const [deliverySlot, setDeliverySlot] = useState('')
+  const [scheduledDeliveryAt, setScheduledDeliveryAt] = useState('')
+  const [savedAddresses, setSavedAddresses] = useState([])
+  const [saveThisAddress, setSaveThisAddress] = useState(false)
+  const [savePaymentForOneClick, setSavePaymentForOneClick] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -56,6 +64,14 @@ const PlaceOrder = () => {
     clientOrderIdRef.current = ''
   }
 
+  useEffect(() => {
+    fetchShippingOptions()
+  }, [shippingRegion])
+
+  useEffect(() => {
+    fetchSavedAddresses()
+  }, [token])
+
   // Save abandoned cart when user visits checkout page
   useEffect(() => {
     const saveAbandonedCart = async () => {
@@ -77,7 +93,7 @@ const PlaceOrder = () => {
         if (orderItems.length === 0) return
         await axios.post(backendUrl + '/api/abandoned/save', {
           items: orderItems,
-          amount: getCartAmount() + delivery_fee
+          amount: getCartAmount() + Number(selectedShipping?.fee || delivery_fee)
         }, { headers: { token } })
       } catch (error) {
         console.log('Abandoned cart save error:', error)
@@ -93,6 +109,45 @@ const PlaceOrder = () => {
   }
 
   const selectedCountry = COUNTRY_OPTIONS.find((country) => country.name === formData.country)
+
+  const selectedShipping = shippingOptions.find((item) => item.method === shippingMethod)
+
+  const fetchShippingOptions = async () => {
+    try {
+      const response = await axios.get(`${backendUrl}/api/order/shipping-options?region=${shippingRegion}`)
+      if (response.data.success) {
+        const options = response.data.options || []
+        setShippingOptions(options)
+        if (options.length > 0) {
+          setShippingMethod(options[0].method)
+        }
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const fetchSavedAddresses = async () => {
+    if (!token) return
+    try {
+      const response = await axios.post(backendUrl + '/api/user/address/list', {}, { headers: { token } })
+      if (response.data.success) {
+        setSavedAddresses(response.data.addresses || [])
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const applySavedAddress = (address) => {
+    setFormData((prev) => ({
+      ...prev,
+      firstName: prev.firstName || '',
+      lastName: prev.lastName || '',
+      email: prev.email || '',
+      ...address
+    }))
+  }
 
   const applyCoupon = async () => {
     if (!couponCode) {
@@ -118,7 +173,8 @@ const PlaceOrder = () => {
   }
 
   const getFinalAmount = () => {
-    const cartAmount = getCartAmount() + delivery_fee
+    const shippingFee = Number(selectedShipping?.fee || delivery_fee)
+    const cartAmount = getCartAmount() + shippingFee
     if (couponApplied) {
       return cartAmount - (cartAmount * discount / 100)
     }
@@ -147,8 +203,9 @@ const PlaceOrder = () => {
       }
 
       const cartAmount = getCartAmount()
+      const shippingFee = Number(selectedShipping?.fee || delivery_fee)
       const couponDiscountAmount = couponApplied
-        ? parseFloat(((cartAmount + delivery_fee) * discount / 100).toFixed(2))
+        ? parseFloat(((cartAmount + shippingFee) * discount / 100).toFixed(2))
         : 0
 
       let orderData = {
@@ -157,7 +214,11 @@ const PlaceOrder = () => {
         amount: getFinalAmount(),
         couponDiscount: couponDiscountAmount,
         couponCode: couponApplied ? couponCode : '',
-        clientOrderId: getClientOrderId()
+        clientOrderId: getClientOrderId(),
+        shippingRegion,
+        shippingMethod,
+        deliverySlot,
+        scheduledDeliveryAt: scheduledDeliveryAt || null
       }
 
       switch (method) {
@@ -166,6 +227,17 @@ const PlaceOrder = () => {
           if (response.data.success) {
             // Clear abandoned cart after successful order
             await axios.post(backendUrl + '/api/abandoned/clear', {}, { headers: { token } })
+            if (saveThisAddress) {
+              await axios.post(backendUrl + '/api/user/address/add', { ...formData, label: 'Saved Address' }, { headers: { token } })
+            }
+            if (savePaymentForOneClick) {
+              await axios.post(backendUrl + '/api/user/payment/save', {
+                provider: method,
+                last4: formData.phone.slice(-4),
+                brand: method === 'stripe' ? 'Card' : 'COD',
+                holderName: `${formData.firstName} ${formData.lastName}`
+              }, { headers: { token } })
+            }
             setCartItems({})
             resetClientOrderId()
             navigate('/order')
@@ -179,6 +251,17 @@ const PlaceOrder = () => {
           const responseStripe = await axios.post(backendUrl + '/api/order/stripe', orderData, { headers: { token } })
           if (responseStripe.data.success) {
             await axios.post(backendUrl + '/api/abandoned/clear', {}, { headers: { token } })
+            if (saveThisAddress) {
+              await axios.post(backendUrl + '/api/user/address/add', { ...formData, label: 'Saved Address' }, { headers: { token } })
+            }
+            if (savePaymentForOneClick) {
+              await axios.post(backendUrl + '/api/user/payment/save', {
+                provider: 'stripe',
+                last4: formData.phone.slice(-4),
+                brand: 'Card',
+                holderName: `${formData.firstName} ${formData.lastName}`
+              }, { headers: { token } })
+            }
             const { session_url } = responseStripe.data
             window.location.replace(session_url)
           } else {
@@ -208,6 +291,19 @@ const PlaceOrder = () => {
         <div className='text-xl sm:text-2xl my-3'>
           <Title text1={'DELIVERY'} text2={'INFORMATION'} />
         </div>
+
+        {savedAddresses.length > 0 && (
+          <div className='border p-3 bg-gray-50'>
+            <p className='text-sm font-medium mb-2'>Use saved address</p>
+            <div className='flex flex-wrap gap-2'>
+              {savedAddresses.map((address, index) => (
+                <button type='button' key={index} onClick={() => applySavedAddress(address)} className='text-xs border px-2 py-1 hover:bg-gray-100'>
+                  {address.label || `Address ${index + 1}`} - {address.city}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className='flex gap-3'>
           <input required onChange={onChangeHandler} name='firstName' value={formData.firstName} className='border border-gray-300 rounded py-1.5 px-3.5 w-full' type="text" placeholder='First name' />
           <input required onChange={onChangeHandler} name='lastName' value={formData.lastName} className='border border-gray-300 rounded py-1.5 px-3.5 w-full' type="text" placeholder='Last name' />
@@ -244,12 +340,50 @@ const PlaceOrder = () => {
           </div>
         </div>
         <input required onChange={onChangeHandler} name='phone' value={formData.phone} className='border border-gray-300 rounded py-1.5 px-3.5 w-full' type="number" placeholder='Phone' />
+
+        <div className='border p-3 bg-gray-50'>
+          <p className='text-sm font-medium mb-2'>Shipping Region</p>
+          <select value={shippingRegion} onChange={(e) => setShippingRegion(e.target.value)} className='border px-3 py-2 w-full mb-2'>
+            <option value='domestic'>Domestic</option>
+            <option value='south_asia'>South Asia</option>
+            <option value='international'>International</option>
+          </select>
+
+          <p className='text-sm font-medium mb-2'>Shipping Method</p>
+          <select value={shippingMethod} onChange={(e) => setShippingMethod(e.target.value)} className='border px-3 py-2 w-full'>
+            {shippingOptions.map((option) => (
+              <option key={option.method} value={option.method}>
+                {option.label} - {currency}{convertPrice(option.fee).toFixed(2)} ({option.eta})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className='border p-3 bg-gray-50'>
+          <p className='text-sm font-medium mb-2'>Order Scheduling</p>
+          <select value={deliverySlot} onChange={(e) => setDeliverySlot(e.target.value)} className='border px-3 py-2 w-full mb-2'>
+            <option value=''>Deliver anytime</option>
+            <option value='morning'>Morning (9am - 12pm)</option>
+            <option value='afternoon'>Afternoon (12pm - 4pm)</option>
+            <option value='evening'>Evening (4pm - 9pm)</option>
+          </select>
+          <input type='datetime-local' value={scheduledDeliveryAt} onChange={(e) => setScheduledDeliveryAt(e.target.value)} className='border px-3 py-2 w-full' />
+        </div>
+
+        <label className='text-sm flex items-center gap-2'>
+          <input type='checkbox' checked={saveThisAddress} onChange={(e) => setSaveThisAddress(e.target.checked)} />
+          Save this address for faster checkout
+        </label>
+        <label className='text-sm flex items-center gap-2'>
+          <input type='checkbox' checked={savePaymentForOneClick} onChange={(e) => setSavePaymentForOneClick(e.target.checked)} />
+          Save this payment setup for one-click buy
+        </label>
       </div>
 
       {/*------ right side ----- */}
       <div className='mt-8'>
         <div className='mt-8 min-w-80'>
-          <CartTotal discount={discount} couponApplied={couponApplied} />
+          <CartTotal discount={discount} couponApplied={couponApplied} shippingFee={Number(selectedShipping?.fee || delivery_fee)} />
         </div>
 
         {/* ------ coupon code box ------ */}
@@ -275,7 +409,7 @@ const PlaceOrder = () => {
           </div>
           {couponApplied && (
             <p className='text-green-500 text-sm mt-1'>
-              ✅ 20% coupon discount applied! Final: ৳{getFinalAmount().toFixed(2)}
+              ✅ 20% coupon discount applied! Final: {currency}{convertPrice(getFinalAmount()).toFixed(2)}
             </p>
           )}
         </div>

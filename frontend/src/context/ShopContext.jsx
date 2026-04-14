@@ -6,9 +6,38 @@ import axios from 'axios'
 export const backendUrl = import.meta.env.VITE_BACKEND_URL
 export const ShopContext = createContext();
 
+const TRANSLATIONS = {
+    en: {
+        home: 'HOME',
+        collection: 'COLLECTION',
+        contact: 'CONTACT',
+        about: 'ABOUT',
+        searchPlaceholder: 'Search products, brands, colors...'
+    },
+    bn: {
+        home: 'হোম',
+        collection: 'কালেকশন',
+        contact: 'যোগাযোগ',
+        about: 'সম্পর্কে',
+        searchPlaceholder: 'পণ্য, ব্র্যান্ড, রঙ খুঁজুন...'
+    },
+    hi: {
+        home: 'होम',
+        collection: 'कलेक्शन',
+        contact: 'संपर्क',
+        about: 'हमारे बारे में',
+        searchPlaceholder: 'प्रोडक्ट, ब्रांड, रंग खोजें...'
+    }
+}
+
 const ShopContextProvider = (props) => {
 
-    const currency = '৳';
+    const [selectedCurrency, setSelectedCurrency] = useState(localStorage.getItem('currency') || 'BDT');
+    const [currencySymbol, setCurrencySymbol] = useState('৳');
+    const [currencyRates, setCurrencyRates] = useState({ BDT: 1, USD: 0.0082, INR: 0.68 });
+    const [selectedLanguage, setSelectedLanguage] = useState(localStorage.getItem('language') || 'en');
+    const [selectedRegion, setSelectedRegion] = useState(localStorage.getItem('region') || 'global');
+    const currency = currencySymbol;
     const delivery_fee = 70;
     const [search, setSearch] = useState('');
     const [showSearch, setShowSearch] = useState(false);
@@ -18,8 +47,61 @@ const ShopContextProvider = (props) => {
     const [userInfo, setUserInfo] = useState(null);
     const [wishlist, setWishlist] = useState([]);
     const [isAuthLoaded, setIsAuthLoaded] = useState(false);
+    const [autocompleteSuggestions, setAutocompleteSuggestions] = useState([]);
+    const [popularSearchTerms, setPopularSearchTerms] = useState([]);
+    const [personalizedHomeData, setPersonalizedHomeData] = useState({ personalized: [], recentlyViewed: [], trending: [] });
 
     const navigate = useNavigate();
+
+    const t = (key) => TRANSLATIONS[selectedLanguage]?.[key] || TRANSLATIONS.en[key] || key
+
+    const convertPrice = (amount) => {
+        const numeric = Number(amount) || 0
+        const rate = Number(currencyRates[selectedCurrency] || 1)
+        return Number((numeric * rate).toFixed(2))
+    }
+
+    const updateUserPreferences = async (prefs = {}) => {
+        if (!token) return
+        try {
+            await axios.post(backendUrl + '/api/user/preferences', prefs, { headers: { token } })
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const updateCurrency = (code) => {
+        setSelectedCurrency(code)
+        localStorage.setItem('currency', code)
+        const symbols = { BDT: '৳', USD: '$', INR: '₹' }
+        setCurrencySymbol(symbols[code] || '৳')
+        updateUserPreferences({ preferredCurrency: code })
+    }
+
+    const updateLanguage = (code) => {
+        setSelectedLanguage(code)
+        localStorage.setItem('language', code)
+        updateUserPreferences({ preferredLanguage: code })
+    }
+
+    const updateRegion = (region) => {
+        setSelectedRegion(region)
+        localStorage.setItem('region', region)
+        updateUserPreferences({ preferredRegion: region })
+    }
+
+    const fetchCurrencyConfig = async () => {
+        try {
+            const response = await axios.get(backendUrl + '/api/product/currency-config')
+            if (response.data.success) {
+                setCurrencyRates(response.data.rates || { BDT: 1, USD: 0.0082, INR: 0.68 })
+                const symbols = response.data.symbols || { BDT: '৳', USD: '$', INR: '₹' }
+                setCurrencySymbol(symbols[selectedCurrency] || '৳')
+            }
+        } catch (error) {
+            console.log(error)
+        }
+    }
 
     // ----- Add to cart -----
     const addToCart = async (itemId, size) => {
@@ -112,9 +194,9 @@ const ShopContextProvider = (props) => {
     // ----- Fetch products -----
     const getProductsData = async () => {
         try {
-            const response = await axios.get(backendUrl + '/api/product/list');
+            const response = await axios.get(`${backendUrl}/api/product/localized?region=${selectedRegion}&language=${selectedLanguage}`);
             if (response.data.success) {
-                setProducts(response.data.Products);
+                setProducts(response.data.products || response.data.Products || []);
             } else {
                 toast.error(response.data.message);
             }
@@ -122,6 +204,143 @@ const ShopContextProvider = (props) => {
             console.log(error)
             toast.error(error.message)
         }
+    }
+
+    const searchProductsAdvanced = async (filters = {}) => {
+        try {
+            const params = new URLSearchParams()
+            const mergedFilters = { ...filters }
+            if (!mergedFilters.userId && userInfo?._id) {
+                mergedFilters.userId = userInfo._id
+            }
+            Object.entries(mergedFilters).forEach(([key, value]) => {
+                if (value === undefined || value === null || value === '') return
+                if (Array.isArray(value) && value.length === 0) return
+                params.append(key, Array.isArray(value) ? value.join(',') : value)
+            })
+
+            const tokenHeader = token ? { headers: { token } } : {}
+            const response = await axios.get(`${backendUrl}/api/product/search?${params.toString()}`, tokenHeader)
+            if (response.data.success) {
+                return response.data.products || []
+            }
+            toast.error(response.data.message || 'Search failed')
+            return []
+        } catch (error) {
+            console.log(error)
+            toast.error(error.message)
+            return []
+        }
+    }
+
+    const fetchAutocompleteSuggestions = async (query) => {
+        try {
+            if (!query || query.trim().length < 2) {
+                setAutocompleteSuggestions([])
+                return []
+            }
+            const response = await axios.get(`${backendUrl}/api/product/autocomplete?q=${encodeURIComponent(query)}`)
+            if (response.data.success) {
+                const suggestions = response.data.suggestions || []
+                setAutocompleteSuggestions(suggestions)
+                return suggestions
+            }
+            return []
+        } catch (error) {
+            console.log(error)
+            return []
+        }
+    }
+
+    const trackSearchTerm = async (term) => {
+        try {
+            if (!term || term.trim().length < 2) return
+            await axios.post(backendUrl + '/api/product/track-search', { term, userId: userInfo?._id || '' })
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const fetchPopularSearchTerms = async () => {
+        try {
+            const response = await axios.get(backendUrl + '/api/product/popular-searches')
+            if (response.data.success) {
+                setPopularSearchTerms(response.data.terms || [])
+            }
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const trackProductView = async (productId) => {
+        if (!token) return
+        try {
+            await axios.post(backendUrl + '/api/product/track-view', { productId }, { headers: { token } })
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const getRecommendations = async (productId = '') => {
+        try {
+            const response = await axios.post(backendUrl + '/api/product/recommendations', {
+                productId,
+                userId: userInfo?._id || ''
+            })
+            if (response.data.success) return response.data
+            return { customersAlsoBought: [], similarProducts: [] }
+        } catch (error) {
+            console.log(error)
+            return { customersAlsoBought: [], similarProducts: [] }
+        }
+    }
+
+    const fetchPersonalizedHomeData = async () => {
+        if (!token) return
+        try {
+            const response = await axios.post(backendUrl + '/api/product/personalized-home', {}, { headers: { token } })
+            if (response.data.success) {
+                setPersonalizedHomeData({
+                    personalized: response.data.personalized || [],
+                    recentlyViewed: response.data.recentlyViewed || [],
+                    trending: response.data.trending || []
+                })
+            }
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const askAiAssistant = async (message) => {
+        if (!token) {
+            return { success: false, reply: 'Please login first so I can help with order tracking.' }
+        }
+        try {
+            const response = await axios.post(backendUrl + '/api/ai/chat', { message }, { headers: { token } })
+            if (response.data.success) {
+                return { success: true, reply: response.data.reply }
+            }
+            return { success: false, reply: response.data.message || 'Sorry, I could not process that.' }
+        } catch (error) {
+            console.log(error)
+            return { success: false, reply: 'Network issue. Please try again.' }
+        }
+    }
+
+    const getAbVariant = async (testKey = 'homepage-layout') => {
+        try {
+            const response = await axios.post(backendUrl + '/api/analytics/ab/variant', {
+                testKey,
+                userId: userInfo?._id || '',
+                sessionId: localStorage.getItem('ab-session') || ''
+            })
+            if (response.data.success) {
+                return response.data.variant
+            }
+        } catch (error) {
+            console.log(error)
+        }
+        return 'A'
     }
 
     // ----- Fetch user cart -----
@@ -199,9 +418,38 @@ const ShopContextProvider = (props) => {
         return wishlist.some(item => item.productId._id === productId)
     }
 
+    const createWishlistShareLink = async () => {
+        if (!token) return ''
+        try {
+            const response = await axios.post(backendUrl + '/api/wishlist/share', {}, { headers: { token } })
+            if (response.data.success) {
+                return response.data.shareUrl
+            }
+        } catch (error) {
+            console.log(error)
+        }
+        return ''
+    }
+
+    const fetchSharedWishlist = async (shareToken) => {
+        try {
+            const response = await axios.post(backendUrl + '/api/wishlist/shared', { shareToken })
+            if (response.data.success) return response.data.wishlist || []
+        } catch (error) {
+            console.log(error)
+        }
+        return []
+    }
+
     useEffect(() => {
         getProductsData()
+        fetchPopularSearchTerms()
+        fetchCurrencyConfig()
     }, [])
+
+    useEffect(() => {
+        getProductsData()
+    }, [selectedRegion, selectedLanguage])
 
     useEffect(() => {
         const existingToken = localStorage.getItem('token')
@@ -218,8 +466,21 @@ const ShopContextProvider = (props) => {
         if (token) {
             getUserInfo(token)
             getUserWishlist()
+            fetchPersonalizedHomeData()
         }
     }, [token])
+
+    useEffect(() => {
+        if (userInfo?.preferredCurrency) {
+            setSelectedCurrency(userInfo.preferredCurrency)
+        }
+        if (userInfo?.preferredLanguage) {
+            setSelectedLanguage(userInfo.preferredLanguage)
+        }
+        if (userInfo?.preferredRegion) {
+            setSelectedRegion(userInfo.preferredRegion)
+        }
+    }, [userInfo?._id])
 
     const value = {
         products, currency, delivery_fee,
@@ -231,7 +492,24 @@ const ShopContextProvider = (props) => {
         setToken, token,
         userInfo, setUserInfo,
         wishlist, addToWishlist, removeFromWishlist, isInWishlist,
-        isAuthLoaded
+        createWishlistShareLink, fetchSharedWishlist,
+        isAuthLoaded,
+        autocompleteSuggestions, fetchAutocompleteSuggestions,
+        popularSearchTerms, fetchPopularSearchTerms, trackSearchTerm,
+        searchProductsAdvanced,
+        personalizedHomeData, fetchPersonalizedHomeData,
+        getRecommendations,
+        trackProductView,
+        askAiAssistant,
+        getAbVariant,
+        selectedCurrency,
+        updateCurrency,
+        selectedLanguage,
+        updateLanguage,
+        selectedRegion,
+        updateRegion,
+        convertPrice,
+        t
     }
 
     return (
