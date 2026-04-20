@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import Home from "./Pages/Home";
 import Collection from "./Pages/Collection";
@@ -19,7 +20,8 @@ import ScrollToTop from "./components/ScrollToTop";
 import Profile from './Pages/Profile'
 import Wishlist from './Pages/Wishlist'
 import ProtectedRoute from './components/ProtectedRoute'
-import AIChatbot from './components/AIChatbot'
+
+const AIChatbot = lazy(() => import('./components/AIChatbot'))
 
 const App = () => {
   return (
@@ -42,7 +44,9 @@ const App = () => {
         <Route path="/verify" element={<Verify />} />
         <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
       </Routes>
-      <AIChatbot />
+      <Suspense fallback={null}>
+        <AIChatbot />
+      </Suspense>
       <Footer />
     </div>
   );
