@@ -2,6 +2,21 @@ import { createContext, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import axios from 'axios'
+import {
+    clearPersistedState,
+    persistCartItems,
+    persistRecentlyViewed,
+    persistSearchFilters,
+    persistToken,
+    persistUserInfo,
+    persistWishlist,
+    readPersistedCartItems,
+    readPersistedRecentlyViewed,
+    readPersistedSearchFilters,
+    readPersistedToken,
+    readPersistedUserInfo,
+    readPersistedWishlist
+} from '../utils/persistedState'
 
 export const backendUrl = import.meta.env.VITE_BACKEND_URL
 export const ShopContext = createContext();
@@ -31,6 +46,7 @@ const TRANSLATIONS = {
 }
 
 const ShopContextProvider = (props) => {
+    const storedFilters = readPersistedSearchFilters()
 
     const [selectedCurrency, setSelectedCurrency] = useState(localStorage.getItem('currency') || 'BDT');
     const [currencySymbol, setCurrencySymbol] = useState('৳');
@@ -39,17 +55,17 @@ const ShopContextProvider = (props) => {
     const [selectedRegion, setSelectedRegion] = useState(localStorage.getItem('region') || 'global');
     const currency = currencySymbol;
     const delivery_fee = 70;
-    const [search, setSearch] = useState('');
-    const [showSearch, setShowSearch] = useState(false);
+    const [search, setSearch] = useState(storedFilters.search || '');
+    const [showSearch, setShowSearch] = useState(Boolean(storedFilters.showSearch));
     const [products, setProducts] = useState([]);
-    const [token, setToken] = useState('');
-    const [cartItems, setCartItems] = useState({});
-    const [userInfo, setUserInfo] = useState(null);
-    const [wishlist, setWishlist] = useState([]);
+    const [token, setToken] = useState(() => readPersistedToken());
+    const [cartItems, setCartItems] = useState(() => readPersistedCartItems());
+    const [userInfo, setUserInfo] = useState(() => readPersistedUserInfo());
+    const [wishlist, setWishlist] = useState(() => readPersistedWishlist());
     const [isAuthLoaded, setIsAuthLoaded] = useState(false);
     const [autocompleteSuggestions, setAutocompleteSuggestions] = useState([]);
     const [popularSearchTerms, setPopularSearchTerms] = useState([]);
-    const [personalizedHomeData, setPersonalizedHomeData] = useState({ personalized: [], recentlyViewed: [], trending: [] });
+    const [personalizedHomeData, setPersonalizedHomeData] = useState({ personalized: [], recentlyViewed: readPersistedRecentlyViewed(), trending: [] });
 
     const navigate = useNavigate();
 
@@ -272,7 +288,16 @@ const ShopContextProvider = (props) => {
         }
     }
 
-    const trackProductView = async (productId) => {
+    const trackProductView = async (productId, productData = null) => {
+        const viewedProduct = productData || products.find((item) => item._id === productId)
+
+        if (viewedProduct) {
+            setPersonalizedHomeData((prev) => ({
+                ...prev,
+                recentlyViewed: [viewedProduct, ...(prev.recentlyViewed || []).filter((item) => item?._id !== viewedProduct._id)].slice(0, 12)
+            }))
+        }
+
         if (!token) return
         try {
             await axios.post(backendUrl + '/api/product/track-view', { productId }, { headers: { token } })
@@ -295,16 +320,16 @@ const ShopContextProvider = (props) => {
         }
     }
 
-    const fetchPersonalizedHomeData = async () => {
-        if (!token) return
+    const fetchPersonalizedHomeData = async (authToken = token) => {
+        if (!authToken) return
         try {
-            const response = await axios.post(backendUrl + '/api/product/personalized-home', {}, { headers: { token } })
+            const response = await axios.post(backendUrl + '/api/product/personalized-home', {}, { headers: { token: authToken } })
             if (response.data.success) {
-                setPersonalizedHomeData({
+                setPersonalizedHomeData((prev) => ({
                     personalized: response.data.personalized || [],
-                    recentlyViewed: response.data.recentlyViewed || [],
+                    recentlyViewed: response.data.recentlyViewed || prev.recentlyViewed || [],
                     trending: response.data.trending || []
-                })
+                }))
             }
         } catch (error) {
             console.log(error)
@@ -313,19 +338,46 @@ const ShopContextProvider = (props) => {
 
     const askAiAssistant = async (message) => {
         if (!token) {
-            return { success: false, reply: 'Please login first so I can help with order tracking.' }
+            return { success: false, reply: 'Please login first to chat with BLOOP AI.' }
         }
+
         try {
             const response = await axios.post(backendUrl + '/api/ai/chat', { message }, { headers: { token } })
-            if (response.data.success) {
-                return { success: true, reply: response.data.reply }
-            }
-            return { success: false, reply: response.data.message || 'Sorry, I could not process that.' }
+            return response.data
         } catch (error) {
             console.log(error)
             return { success: false, reply: 'Network issue. Please try again.' }
         }
     }
+
+    const getAiSupportStatus = async () => {
+        if (!token) {
+            return { success: false, status: 'done' }
+        }
+
+        try {
+            const response = await axios.post(backendUrl + '/api/ai/chat-status', {}, { headers: { token } })
+            return response.data
+        } catch (error) {
+            console.log(error)
+            return { success: false, status: 'done' }
+        }
+    }
+
+    const getActiveSupportChat = async () => {
+        if (!token) {
+            return { success: false, status: 'done', messages: [] }
+        }
+
+        try {
+            const response = await axios.get(backendUrl + '/api/user/chat', { headers: { token } })
+            return response.data
+        } catch (error) {
+            console.log(error)
+            return { success: false, status: 'done', messages: [] }
+        }
+    }
+
 
     const getAbVariant = async (testKey = 'homepage-layout') => {
         try {
@@ -402,10 +454,10 @@ const ShopContextProvider = (props) => {
         }
     }
 
-    const getUserWishlist = async () => {
-        if (!token) return
+    const getUserWishlist = async (authToken = token) => {
+        if (!authToken) return
         try {
-            const response = await axios.post(backendUrl + '/api/wishlist/get', {}, { headers: { token } })
+            const response = await axios.post(backendUrl + '/api/wishlist/get', {}, { headers: { token: authToken } })
             if (response.data.success) {
                 setWishlist(response.data.wishlist)
             }
@@ -441,10 +493,22 @@ const ShopContextProvider = (props) => {
         return []
     }
 
+    const clearPersistedCustomerState = () => {
+        clearPersistedState()
+        setToken('')
+        setCartItems({})
+        setUserInfo(null)
+        setWishlist([])
+        setSearch('')
+        setShowSearch(false)
+        setPersonalizedHomeData({ personalized: [], recentlyViewed: [], trending: [] })
+    }
+
     useEffect(() => {
         getProductsData()
         fetchPopularSearchTerms()
         fetchCurrencyConfig()
+        setIsAuthLoaded(true)
     }, [])
 
     useEffect(() => {
@@ -452,23 +516,34 @@ const ShopContextProvider = (props) => {
     }, [selectedRegion, selectedLanguage])
 
     useEffect(() => {
-        const existingToken = localStorage.getItem('token')
-        if (existingToken) {
-            setToken(existingToken)
-            getUserCart(existingToken)
-            getUserInfo(existingToken)
-            getUserWishlist()
-        }
-        setIsAuthLoaded(true)
-    }, [])
-
-    useEffect(() => {
         if (token) {
+            persistToken(token)
+            getUserCart(token)
             getUserInfo(token)
-            getUserWishlist()
-            fetchPersonalizedHomeData()
+            getUserWishlist(token)
+            fetchPersonalizedHomeData(token)
         }
     }, [token])
+
+    useEffect(() => {
+        persistCartItems(cartItems)
+    }, [cartItems])
+
+    useEffect(() => {
+        persistUserInfo(userInfo)
+    }, [userInfo])
+
+    useEffect(() => {
+        persistSearchFilters({ search, showSearch })
+    }, [search, showSearch])
+
+    useEffect(() => {
+        persistWishlist(wishlist)
+    }, [wishlist])
+
+    useEffect(() => {
+        persistRecentlyViewed(personalizedHomeData.recentlyViewed || [])
+    }, [personalizedHomeData.recentlyViewed])
 
     useEffect(() => {
         if (userInfo?.preferredCurrency) {
@@ -501,6 +576,8 @@ const ShopContextProvider = (props) => {
         getRecommendations,
         trackProductView,
         askAiAssistant,
+        getAiSupportStatus,
+        getActiveSupportChat,
         getAbVariant,
         selectedCurrency,
         updateCurrency,
@@ -509,6 +586,7 @@ const ShopContextProvider = (props) => {
         selectedRegion,
         updateRegion,
         convertPrice,
+        clearPersistedCustomerState,
         t
     }
 
