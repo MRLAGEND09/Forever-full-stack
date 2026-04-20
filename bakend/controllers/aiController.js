@@ -1,8 +1,35 @@
-import orderModel from '../models/orderModel.js'
-import productModel from '../models/productModel.js'
+import crypto from 'crypto'
 import { v2 as cloudinary } from 'cloudinary'
 
-const normalizeText = (value) => String(value || '').trim().toLowerCase()
+const tryOnResultCache = new Map()
+const TRYON_CACHE_TTL_MS = 60 * 60 * 1000
+
+const getTryOnCacheKey = (userBuffer, garmentUrl, garmentCategory) => {
+    const userHash = crypto.createHash('sha1').update(userBuffer).digest('hex').slice(0, 16)
+    const garmentHash = crypto.createHash('sha1').update(String(garmentUrl || '')).digest('hex').slice(0, 16)
+    return `${userHash}-${garmentHash}-${garmentCategory || 'upper_body'}`
+}
+
+const getTryOnCache = (key) => {
+    const entry = tryOnResultCache.get(key)
+    if (!entry) return null
+
+    if (Date.now() - entry.ts > TRYON_CACHE_TTL_MS) {
+        tryOnResultCache.delete(key)
+        return null
+    }
+
+    return entry.value
+}
+
+const setTryOnCache = (key, value) => {
+    if (tryOnResultCache.size > 200) {
+        const firstKey = tryOnResultCache.keys().next().value
+        tryOnResultCache.delete(firstKey)
+    }
+
+    tryOnResultCache.set(key, { value, ts: Date.now() })
+}
 
 const getErrorMessage = (error) => {
     if (!error) return 'Unknown error'
@@ -13,10 +40,12 @@ const getErrorMessage = (error) => {
 const fileToBuffer = async (file) => {
     if (!file) return null
     if (file.buffer) return file.buffer
+
     if (file.path) {
         const fs = await import('fs/promises')
         return fs.readFile(file.path)
     }
+
     return null
 }
 
@@ -28,6 +57,7 @@ const bufferToDataUri = (buffer, mimeType = 'image/png') => {
 const parseDataUrlToBuffer = (dataUrl) => {
     const match = String(dataUrl || '').match(/^data:(.+);base64,(.+)$/)
     if (!match) return null
+
     return {
         mimeType: match[1] || 'image/png',
         buffer: Buffer.from(match[2], 'base64')
@@ -36,8 +66,12 @@ const parseDataUrlToBuffer = (dataUrl) => {
 
 const fetchImageFromUrl = async (url) => {
     if (!url) return null
+
     const response = await fetch(url)
-    if (!response.ok) throw new Error(`Could not fetch garment image from URL (${response.status})`)
+    if (!response.ok) {
+        throw new Error(`Could not fetch garment image from URL (${response.status})`)
+    }
+
     const arr = await response.arrayBuffer()
     return {
         buffer: Buffer.from(arr),
@@ -58,6 +92,7 @@ const uploadBufferToCloudinary = async (buffer, mimeType, folder = 'virtual_tryo
 
 const safeJsonParse = (value, fallback = {}) => {
     if (!value) return fallback
+
     try {
         const parsed = JSON.parse(value)
         return parsed && typeof parsed === 'object' ? parsed : fallback
@@ -101,12 +136,23 @@ const tryReplicateVirtualTryOn = async ({ userBuffer, userMimeType, garmentBuffe
     const userImageKey = process.env.REPLICATE_VIRTUAL_TRYON_USER_KEY || 'human_img'
     const garmentImageKey = process.env.REPLICATE_VIRTUAL_TRYON_GARMENT_KEY || 'garm_img'
     const promptKey = process.env.REPLICATE_VIRTUAL_TRYON_PROMPT_KEY || ''
-    const descriptionKey = process.env.REPLICATE_VIRTUAL_TRYON_DESCRIPTION_KEY || ''
+    const descriptionKey = process.env.REPLICATE_VIRTUAL_TRYON_DESCRIPTION_KEY || 'garment_des'
     const categoryKey = process.env.REPLICATE_VIRTUAL_TRYON_CATEGORY_KEY || ''
     const extraInput = safeJsonParse(process.env.REPLICATE_VIRTUAL_TRYON_EXTRA_INPUT, {})
 
+    const categoryMap = {
+        upper_body: 'upper_body',
+        lower_body: 'lower_body',
+        dresses: 'dresses',
+        topwear: 'upper_body',
+        bottomwear: 'lower_body',
+        dress: 'dresses'
+    }
+    const resolvedCategory = categoryMap[String(garmentCategory || '').toLowerCase()] || 'upper_body'
+
     const input = {
         ...extraInput,
+        category: resolvedCategory,
         [userImageKey]: userImageUrl,
         [garmentImageKey]: garmentImageUrl
     }
@@ -320,91 +366,6 @@ const cloudinaryOverlayFallback = async ({ userBuffer, userMimeType, garmentBuff
     }
 }
 
-const getOrderStatusReply = async (userId, message) => {
-    const queryText = normalizeText(message)
-    const candidate = queryText.match(/[a-z0-9-]{6,}/i)?.[0] || ''
-
-    const userOrders = await orderModel.find({ userId }).sort({ date: -1 }).limit(10).lean()
-    if (!userOrders.length) {
-        return 'I could not find any orders on your account yet. Place your first order and I can track it for you instantly.'
-    }
-
-    let targetOrder = userOrders[0]
-
-    if (candidate) {
-        const matched = userOrders.find((order) => {
-            return (
-                String(order._id).includes(candidate) ||
-                String(order.invoiceNumber || '').toLowerCase().includes(candidate.toLowerCase()) ||
-                String(order.clientOrderId || '').toLowerCase().includes(candidate.toLowerCase())
-            )
-        })
-        if (matched) targetOrder = matched
-    }
-
-    const etaMap = {
-        'Order Placed': 'within 2-4 business days',
-        Processing: 'within 1-3 business days',
-        Shipped: 'within 1-2 business days',
-        Delivered: 'already delivered',
-        Cancelled: 'cancelled by support/admin'
-    }
-
-    return `Order ${targetOrder.invoiceNumber || targetOrder._id} is currently "${targetOrder.status}". Expected delivery: ${etaMap[targetOrder.status] || 'soon'}. Payment: ${targetOrder.payment ? 'Paid' : 'Pending'}.`
-}
-
-const getRecommendationReply = async () => {
-    const topRated = await productModel.find({}).sort({ rating: -1, reviewCount: -1 }).limit(3).lean()
-    if (!topRated.length) {
-        return 'I am ready to recommend products, but I do not see products in stock yet.'
-    }
-    const names = topRated.map((item) => item.name).join(', ')
-    return `Based on current trends, you can check: ${names}. Ask me for a specific category like jackets or topwear and I will narrow it down.`
-}
-
-const aiChatSupport = async (req, res) => {
-    try {
-        const { userId, message = '' } = req.body
-        const text = normalizeText(message)
-
-        if (!text) {
-            return res.json({ success: true, reply: 'Ask me anything about products, orders, returns, or delivery times.' })
-        }
-
-        if (text.includes('track') || text.includes('order status') || text.includes('where is my order')) {
-            const reply = await getOrderStatusReply(userId, text)
-            return res.json({ success: true, reply })
-        }
-
-        if (text.includes('recommend') || text.includes('similar') || text.includes('popular')) {
-            const reply = await getRecommendationReply()
-            return res.json({ success: true, reply })
-        }
-
-        if (text.includes('return') || text.includes('exchange')) {
-            return res.json({
-                success: true,
-                reply: 'You can request return or exchange within 7 days of delivery. Keep the product unused with original packaging, then contact support with your invoice number.'
-            })
-        }
-
-        if (text.includes('delivery') || text.includes('shipping')) {
-            return res.json({
-                success: true,
-                reply: 'Standard delivery is available across Bangladesh. Most orders are delivered in 2-4 business days after confirmation.'
-            })
-        }
-
-        return res.json({
-            success: true,
-            reply: 'I can help with product recommendations, order tracking, delivery questions, returns, and payment status. Try: "track my latest order".'
-        })
-    } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
-    }
-}
-
 const generateVirtualTryOn = async (req, res) => {
     try {
         const userFile = req.files?.userImage?.[0]
@@ -422,6 +383,12 @@ const generateVirtualTryOn = async (req, res) => {
         const userBufferRaw = await fileToBuffer(userFile)
         if (!userBufferRaw) {
             return res.json({ success: false, message: 'Could not read user image' })
+        }
+
+        const cacheKey = getTryOnCacheKey(userBufferRaw, garmentImageUrl || '', garmentCategory)
+        const cached = getTryOnCache(cacheKey)
+        if (cached) {
+            return res.json({ success: true, provider: 'cache', finalImageUrl: cached, fromCache: true })
         }
 
         let garmentPayload = null
@@ -474,6 +441,7 @@ const generateVirtualTryOn = async (req, res) => {
                         resource_type: 'image'
                     })
 
+                    setTryOnCache(cacheKey, uploaded.secure_url)
                     return res.json({
                         success: true,
                         provider: replicateResult.provider,
@@ -551,4 +519,6 @@ const generateVirtualTryOn = async (req, res) => {
     }
 }
 
-export { aiChatSupport, generateVirtualTryOn }
+export {
+    generateVirtualTryOn
+}
