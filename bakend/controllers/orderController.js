@@ -863,8 +863,24 @@ const getShippingOptions = async (req, res) => {
 // All orders data for admin panel
 const allOrders = async (req, res) => {
     try {
-        const orders = await orderModel.find({})
-        res.json({ success: true, orders })
+        const orders = await orderModel.find({}).lean()
+        const userIds = [...new Set(orders.map((order) => String(order.userId || '')).filter(Boolean))]
+        const users = await userModel.find({ _id: { $in: userIds } }).select('name email avatar').lean()
+        const userMap = new Map(users.map((user) => [String(user._id), user]))
+
+        const enrichedOrders = orders.map((order) => {
+            const user = userMap.get(String(order.userId || ''))
+            return {
+                ...order,
+                customerProfile: {
+                    name: user?.name || `${order.address?.firstName || ''} ${order.address?.lastName || ''}`.trim(),
+                    email: user?.email || order.address?.email || '',
+                    avatar: user?.avatar || ''
+                }
+            }
+        })
+
+        res.json({ success: true, orders: enrichedOrders })
     } catch (error) {
         console.log(error)
         res.json({ success: false, message: error.message })
