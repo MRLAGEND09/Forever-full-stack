@@ -13,6 +13,9 @@ import reviewRouter from './routes/reviewRoute.js'
 import wishlistRouter from './routes/wishlistRoute.js'
 import aiRouter from './routes/aiRoute.js'
 import analyticsRouter from './routes/analyticsRoute.js'
+import adminSupportRouter from './routes/adminSupportRoute.js'
+import uploadRouter from './routes/uploadRoute.js'
+import path from 'path'
 
 // App config 
 const app = express()
@@ -24,6 +27,7 @@ connectCloudinary()
 // middlewares
 app.use(express.json())
 app.use(cors())
+app.use('/uploads', express.static(path.resolve('uploads')))
 
 
 // api endpoints  
@@ -36,6 +40,8 @@ app.use('/api/review', reviewRouter)
 app.use('/api/wishlist', wishlistRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/analytics', analyticsRouter)
+app.use('/api/admin', adminSupportRouter)
+app.use('/api', uploadRouter)
 
 
 
