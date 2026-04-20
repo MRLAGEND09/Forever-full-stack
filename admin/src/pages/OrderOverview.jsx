@@ -62,6 +62,13 @@ const OrderOverview = ({ token }) => {
     fetchAllOrders()
   }, [token])
 
+  const getAvatarUrl = (order) => {
+    const avatar = order?.customerProfile?.avatar || ''
+    if (!avatar) return '/default-avatar.png'
+    if (/^https?:\/\//i.test(avatar)) return avatar
+    return `${bakendUrl}${avatar}`
+  }
+
   // 🔥 Status Icons
   const getStatusIcon = (status) => {
     switch (status) {
@@ -194,9 +201,16 @@ const OrderOverview = ({ token }) => {
               </div>
 
               {/* Customer */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-sm">
 
-                <p><FaUser className="inline mr-1" /> {order.address?.name}</p>
+                <div className='flex items-center gap-3 min-w-0'>
+                  <img
+                    src={getAvatarUrl(order)}
+                    alt={order.customerProfile?.name || order.address?.name || 'Customer'}
+                    className='w-10 h-10 rounded-full object-cover border border-gray-200 flex-shrink-0'
+                  />
+                  <p className='truncate'><FaUser className="inline mr-1" /> {order.customerProfile?.name || order.address?.name}</p>
+                </div>
                 <p><FaEnvelope className="inline mr-1" /> {order.address?.email}</p>
                 <p><FaPhone className="inline mr-1" /> {order.address?.phone}</p>
                 <p><FaCalendarAlt className="inline mr-1" /> {new Date(order.date).toLocaleDateString()}</p>
