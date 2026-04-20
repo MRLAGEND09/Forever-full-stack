@@ -68,6 +68,13 @@ const OrderDetail = ({ token }) => {
     return 'pending'
   }
 
+  const getAvatarUrl = () => {
+    const avatar = order?.customerProfile?.avatar || ''
+    if (!avatar) return '/default-avatar.png'
+    if (/^https?:\/\//i.test(avatar)) return avatar
+    return `${bakendUrl}${avatar}`
+  }
+
   return (
     <div className='p-6'>
       <button
@@ -80,10 +87,19 @@ const OrderDetail = ({ token }) => {
       <div className='bg-white rounded-lg shadow-lg p-8'>
         {/* Header */}
         <div className='mb-8 border-b pb-6'>
-          <div className='flex justify-between items-start'>
-            <div>
-              <h1 className='text-3xl font-bold'>Order #{order.invoiceNumber}</h1>
-              <p className='text-gray-500 mt-1'>Placed on {new Date(order.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <div className='flex justify-between items-start gap-6 flex-col lg:flex-row'>
+            <div className='flex items-center gap-4'>
+              <img
+                src={getAvatarUrl()}
+                alt={order?.customerProfile?.name || order.address?.firstName || 'Customer'}
+                className='w-14 h-14 rounded-full object-cover border border-gray-200'
+              />
+              <div>
+                <h1 className='text-3xl font-bold'>Order #{order.invoiceNumber}</h1>
+                <p className='text-gray-800 font-medium'>{order.customerProfile?.name || `${order.address.firstName} ${order.address.lastName}`}</p>
+                <p className='text-gray-500 text-sm'>{order.customerProfile?.email || order.address.email}</p>
+                <p className='text-gray-500 mt-1'>Placed on {new Date(order.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
             </div>
             <div className={`px-4 py-2 rounded font-semibold ${getStatusColor(order.status)}`}>
               {order.status}
@@ -115,8 +131,8 @@ const OrderDetail = ({ token }) => {
           {/* Customer Info */}
           <div className='border rounded-lg p-6'>
             <h3 className='text-lg font-bold mb-4'>Customer Info</h3>
-            <p className='text-gray-600 mb-2'><strong>Name:</strong> {order.address.firstName} {order.address.lastName}</p>
-            <p className='text-gray-600 mb-2'><strong>Email:</strong> {order.address.email}</p>
+            <p className='text-gray-600 mb-2'><strong>Name:</strong> {order.customerProfile?.name || `${order.address.firstName} ${order.address.lastName}`}</p>
+            <p className='text-gray-600 mb-2'><strong>Email:</strong> {order.customerProfile?.email || order.address.email}</p>
             <p className='text-gray-600 mb-2'><strong>Phone:</strong> {order.address.phone}</p>
             <p className='text-gray-600 mb-2'><strong>Address:</strong> {order.address.street}, {order.address.city}, {order.address.country}</p>
             <p className='text-gray-600'><strong>Zip:</strong> {order.address.zipcode}</p>
