@@ -215,16 +215,6 @@ const Login = () => {
           icon={<i className='fab fa-facebook text-white text-lg'></i>}
           label='Continue with Facebook'
         />
-
-        <LoginMethodButton
-          method='instagram'
-          lastLoginMethod={lastLoginMethod}
-          type='button'
-          onClick={() => toast.info('Instagram login can be enabled after adding Instagram OAuth app keys in Firebase/Auth provider settings.')}
-          className='w-full bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white py-2.5 px-4 transition'
-          icon={<i className='fab fa-instagram text-white text-lg'></i>}
-          label='Continue with Instagram'
-        />
       </div>
 
       {/* Divider */}

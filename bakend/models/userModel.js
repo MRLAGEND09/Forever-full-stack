@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema(
 
     provider: {
         type: String,
-        enum: ["manual", "google", "facebook", "instagram"],
+        enum: ["manual", "google", "facebook"],
         default: "manual"
     },
 
